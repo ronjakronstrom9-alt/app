@@ -1,0 +1,100 @@
+{
+  "theme": "DARK",
+  "archetype": "5 (Luxury / Mystical)",
+  "emotional_tone": "Celestial, occult, refined, engaging, serene",
+  "colors": {
+    "background": {
+      "primary": "#0B081A",
+      "secondary": "#110A2E"
+    },
+    "surface": {
+      "primary": "#1A103C",
+      "secondary": "#24184E"
+    },
+    "text": {
+      "primary": "#F5F5F0",
+      "secondary": "#AFA5CA"
+    },
+    "accent": {
+      "gold": "#D4AF37",
+      "gold_glow": "#F2CD5C",
+      "violet": "#4A3B69",
+      "crimson": "#E84855",
+      "success_green": "#4ADE80"
+    }
+  },
+  "typography": {
+    "headings": {
+      "fontFamily": "Playfair Display, serif",
+      "description": "Elegant, mystical, high contrast",
+      "weights": ["400", "700"]
+    },
+    "body": {
+      "fontFamily": "Outfit, sans-serif",
+      "description": "Clean, highly readable in small UI parts",
+      "weights": ["300", "400", "600"]
+    }
+  },
+  "spacing_and_layout": {
+    "padding": "Generous. Use 16px to 24px padding for main containers.",
+    "borderRadius": "16px to 24px for cards to feel premium and soft.",
+    "borders": "1px solid rgba(212, 175, 55, 0.2) on surfaces to add depth without relying heavily on shadows."
+  },
+  "components": {
+    "buttons": {
+      "primary": "Background #D4AF37 (Gold), Text #0B081A. Rounded pill shapes (borderRadius 30). Font Outfit 600.",
+      "secondary": "Background transparent, Border 1px #D4AF37, Text #D4AF37."
+    },
+    "path_nodes": {
+      "description": "Duolingo-style vertical path. Use Star or Moon icons.",
+      "completed": "Gold background, bright icon, connected by solid gold line.",
+      "current": "Pulsing animation, larger scale, surrounded by gold aura.",
+      "locked": "Muted indigo background #24184E, connected by dashed line."
+    },
+    "cards": {
+      "description": "Tarot flashcards and info panels.",
+      "style": "Surface #1A103C with Gold subtle border. Soft inner shadow if possible. Use golden aspect ratio for Tarot cards (approx 2:3)."
+    },
+    "bottom_tab_bar": {
+      "style": "Background #110A2E, borderTopWidth 1, borderTopColor rgba(212, 175, 55, 0.1). Active icon Gold, Inactive icon Lilac (#AFA5CA)."
+    }
+  },
+  "views": {
+    "Auth": "Simple, centered form. Elegant typography. Gold accent on inputs. Minimalist inputs with bottom borders or soft surface backgrounds.",
+    "Home": "Vertical scroll path of nodes. Sticky top header showing XP, Level, Daily Streak (fire icon), and Hearts (heart icon) in gold/red.",
+    "Lesson": "Bite-sized flashcards. Swipe left/right or tap to flip. Focus on single card meaning, upright/reversed switch.",
+    "Quiz": "Multiple choice questions. Top progress bar filling up in gold. Immediate visual feedback (green/red borders) on selection.",
+    "Progress_Profile": "Grid of stats. Display user's current 'Tarot Level' (e.g., The Fool, The Magician). Dark mysterious theme."
+  },
+  "animations": {
+    "interactions": "Smooth tap scales (0.95 scale on press).",
+    "rewards": "Gold particles or soft glowing pulses when completing a lesson.",
+    "path": "Scroll momentum, pulsing current node."
+  },
+  "media": {
+    "background_texture": {
+      "url": "https://images.unsplash.com/photo-1520034475321-cbe63696469a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwzfHxuaWdodCUyMHNreSUyMHN0YXJzJTIwZ2FsYXh5JTIwZGFya3xlbnwwfHx8fDE3ODE2ODg4NDJ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Night sky with stars. Use with low opacity (10-20%) overlay on the main background to add depth."
+    },
+    "tarot_placeholder_1": {
+      "url": "https://images.unsplash.com/photo-1637757969279-c4d028905131?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwyfHx0YXJvdCUyMGNhcmRzJTIwbXlzdGljYWx8ZW58MHx8fHwxNzgxNjg4ODQyfDA&ixlib=rb-4.1.0&q=85",
+      "description": "General tarot card aesthetic image for library or lesson placeholders."
+    },
+    "mystical_book": {
+      "url": "https://images.unsplash.com/photo-1600429753199-5376c2738737?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwzfHx0YXJvdCUyMGNhcmRzJTIwbXlzdGljYWx8ZW58MHx8fHwxNzgxNjg4ODQyfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Black and gold book, useful for progress or library header backgrounds."
+    }
+  },
+  "accessibility_and_testing": {
+    "test_id_convention": "All interactive elements MUST include a 'testID' attribute (since it's React Native, use testID instead of data-testid). Format: kebab-case, role-based. e.g., testID='login-button'.",
+    "contrast": "Ensure text meets 4.5:1 ratio against the dark indigo background."
+  },
+  "instructions_to_main_agent": [
+    "Build this as an Expo React Native app using standard React Native components (View, Text, TouchableOpacity, ScrollView, etc.).",
+    "Use 'testID' on all interactable elements for testing.",
+    "Implement navigation using Expo Router or React Navigation.",
+    "Apply the font families (Playfair Display, Outfit) using expo-font.",
+    "Create a gamified node path UI on the Home screen inspired by Duolingo.",
+    "Maintain the deep dark theme with gold accents. Avoid pure black and pure white."
+  ]
+}
