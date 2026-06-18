@@ -20,7 +20,7 @@ export function StarBg({ count = 60 }: { count?: number }) {
   }, [count, width, height]);
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { pointerEvents: "none" as any }]}>
       {stars.map((s, i) => (
         <View
           key={i}

@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     marginLeft: 24, marginRight: 24,
   },
   nodeCompleted: { backgroundColor: colors.gold, borderColor: colors.goldGlow },
-  nodeCurrent: { borderColor: colors.gold, backgroundColor: colors.surface2, shadowColor: colors.gold, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
+  nodeCurrent: { borderColor: colors.gold, backgroundColor: colors.surface2 },
   nodeLocked: { backgroundColor: colors.surface2, borderColor: colors.violet, opacity: 0.7 },
   nodeEmoji: { fontSize: 38 },
   checkBadge: {
