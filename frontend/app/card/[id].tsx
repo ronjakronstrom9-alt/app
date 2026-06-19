@@ -1,11 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
 import { api, Card } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
+
+function toRoman(n: number): string {
+  if (n === 0) return "0";
+  const map: [number, string][] = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  let out = ""; let v = n;
+  for (const [val, sym] of map) {
+    while (v >= val) { out += sym; v -= val; }
+  }
+  return out;
+}
 
 export default function CardDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,15 +54,19 @@ export default function CardDetail() {
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn} testID="card-back-btn">
             <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{card.arcana} Arcana</Text>
+          <Text style={styles.headerTitle}>{card.arcana} Arcana · {card.element}</Text>
           <View style={styles.iconBtn} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={[styles.illustration, reversed && { transform: [{ rotate: "180deg" }] }]}>
-            <Text style={styles.emoji}>{card.image_emoji}</Text>
-            <Text style={styles.num}>{String(card.number).padStart(2, "0")}</Text>
-            <Text style={styles.name}>{card.name}</Text>
+          <View style={styles.cardFrame}>
+            <View style={[styles.cardImageWrap, reversed && { transform: [{ rotate: "180deg" }] }]}>
+              <Image source={{ uri: card.image_url }} style={styles.cardImage} resizeMode="cover" />
+            </View>
+            <View style={styles.cardFooter}>
+              <Text style={styles.cardRoman}>{toRoman(card.number)}</Text>
+              <Text style={styles.cardName}>{card.name.toUpperCase()}</Text>
+            </View>
           </View>
 
           <View style={styles.toggle}>
@@ -79,10 +93,17 @@ export default function CardDetail() {
           </View>
 
           <Text style={styles.sectionHeading}>Meaning</Text>
+          <View style={styles.divider} />
           <Text style={styles.body}>{meaning}</Text>
 
-          <Text style={styles.sectionHeading}>Imagery</Text>
-          <Text style={styles.body}>{card.description}</Text>
+          {!reversed && (
+            <>
+              <Text style={styles.sectionHeading}>Imagery & Symbolism</Text>
+              <View style={styles.divider} />
+              <Text style={styles.body}>{card.description}</Text>
+              <Text style={[styles.body, { marginTop: 8 }]}>{card.symbolism}</Text>
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -93,27 +114,35 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 8 },
   iconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { color: colors.gold, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
-  scroll: { padding: 20, paddingBottom: 60, gap: 16 },
-  illustration: {
-    width: "100%", aspectRatio: 0.7, maxWidth: 280, alignSelf: "center",
-    backgroundColor: colors.surface, borderRadius: 22, borderWidth: 2, borderColor: colors.gold,
-    alignItems: "center", justifyContent: "center", padding: 18, gap: 10,
+  headerTitle: { color: colors.gold, fontSize: 11, letterSpacing: 2, textTransform: "uppercase" },
+  scroll: { padding: 20, paddingBottom: 60, gap: 14 },
+  cardFrame: {
+    width: "100%", maxWidth: 240, alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderRadius: 18, borderWidth: 2, borderColor: colors.gold,
+    overflow: "hidden",
   },
-  emoji: { fontSize: 90 },
-  num: { color: colors.gold, fontFamily: fonts.display, fontSize: 20 },
-  name: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 24, textAlign: "center" },
+  cardImageWrap: { width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
+  cardImage: { width: "100%", height: "100%" },
+  cardFooter: {
+    paddingVertical: 10, backgroundColor: colors.bg2,
+    borderTopWidth: 1, borderTopColor: colors.borderSoft,
+    alignItems: "center", gap: 2,
+  },
+  cardRoman: { color: colors.gold, fontFamily: fonts.display, fontSize: 14, letterSpacing: 4 },
+  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 13, letterSpacing: 3 },
   toggle: {
     flexDirection: "row", backgroundColor: colors.surface, borderRadius: 999,
-    padding: 4, borderWidth: 1, borderColor: colors.borderSoft, marginTop: 8,
+    padding: 4, borderWidth: 1, borderColor: colors.borderSoft, marginTop: 6,
   },
   toggleBtn: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 999 },
   toggleActive: { backgroundColor: colors.gold },
-  toggleText: { color: colors.textSecondary, fontSize: 13, letterSpacing: 1, textTransform: "uppercase" },
+  toggleText: { color: colors.textSecondary, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase" },
   toggleTextActive: { color: colors.bg, fontWeight: "700" },
-  kwRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  kwRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   kw: { borderWidth: 1, borderColor: colors.gold, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  kwText: { color: colors.gold, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
-  sectionHeading: { color: colors.gold, fontFamily: fonts.display, fontSize: 20, marginTop: 10 },
+  kwText: { color: colors.gold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
+  sectionHeading: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 24, marginTop: 12 },
+  divider: { height: 1, backgroundColor: colors.border, width: 50 },
   body: { color: colors.textPrimary, fontSize: 15, lineHeight: 24 },
 });

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,7 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 import uuid
 from datetime import datetime, timedelta, timezone, date
@@ -17,19 +17,19 @@ import jwt as pyjwt
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
+SEED_VERSION = 2  # bump to re-seed
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 # ===== MODELS =====
@@ -68,7 +68,9 @@ class TarotCard(BaseModel):
     upright_meaning: str
     reversed_meaning: str
     description: str
-    image_emoji: str  # display symbol
+    symbolism: str
+    image_emoji: str
+    image_url: str
     element: str
 
 class Lesson(BaseModel):
@@ -77,7 +79,8 @@ class Lesson(BaseModel):
     order: int
     title: str
     intro: str
-    sections: List[dict]  # {heading, body}
+    subtitle: str
+    sections: List[dict]
     xp_reward: int
 
 class QuizQuestion(BaseModel):
@@ -87,14 +90,9 @@ class QuizQuestion(BaseModel):
     correct_index: int
     explanation: str
 
-class Quiz(BaseModel):
-    id: str
-    lesson_id: str
-    questions: List[QuizQuestion]
-
 class QuizSubmission(BaseModel):
     lesson_id: str
-    answers: List[int]  # selected index per question
+    answers: List[int]
     hearts_lost: int
 
 class QuizResult(BaseModel):
@@ -119,12 +117,11 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 def create_token(user_id: str) -> str:
-    payload = {
+    return pyjwt.encode({
         'sub': user_id,
         'exp': datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS),
         'iat': datetime.now(timezone.utc),
-    }
-    return pyjwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+    }, JWT_SECRET, algorithm=JWT_ALG)
 
 async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> dict:
     if not creds or not creds.credentials:
@@ -142,13 +139,9 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
 
 def user_to_out(user: dict) -> UserOut:
     return UserOut(
-        id=user['id'],
-        email=user['email'],
-        name=user['name'],
-        xp=user.get('xp', 0),
-        level=user.get('level', 1),
-        hearts=user.get('hearts', 5),
-        streak=user.get('streak', 0),
+        id=user['id'], email=user['email'], name=user['name'],
+        xp=user.get('xp', 0), level=user.get('level', 1),
+        hearts=user.get('hearts', 5), streak=user.get('streak', 0),
         last_active_date=user.get('last_active_date'),
         completed_lessons=user.get('completed_lessons', []),
         created_at=user.get('created_at', ''),
@@ -156,7 +149,6 @@ def user_to_out(user: dict) -> UserOut:
 
 
 def xp_to_level(xp: int) -> int:
-    # Level 1: 0xp, Level 2: 100, Level 3: 250, Level 4: 450, Level 5: 700, then +300 each
     thresholds = [0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700]
     lvl = 1
     for i, t in enumerate(thresholds):
@@ -169,29 +161,21 @@ def xp_to_level(xp: int) -> int:
 @api_router.post("/auth/signup", response_model=AuthResponse)
 async def signup(req: SignupReq):
     email = req.email.lower().strip()
-    existing = await db.users.find_one({"email": email})
-    if existing:
+    if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     user_id = str(uuid.uuid4())
     user_doc = {
-        "id": user_id,
-        "email": email,
-        "name": req.name.strip() or "Seeker",
+        "id": user_id, "email": email, "name": req.name.strip() or "Seeker",
         "password_hash": hash_password(req.password),
-        "xp": 0,
-        "level": 1,
-        "hearts": 5,
-        "streak": 0,
-        "last_active_date": None,
-        "completed_lessons": [],
+        "xp": 0, "level": 1, "hearts": 5, "streak": 0,
+        "last_active_date": None, "completed_lessons": [],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(user_doc)
     user_doc.pop('_id', None)
-    token = create_token(user_id)
-    return AuthResponse(token=token, user=user_to_out(user_doc))
+    return AuthResponse(token=create_token(user_id), user=user_to_out(user_doc))
 
 
 @api_router.post("/auth/login", response_model=AuthResponse)
@@ -200,8 +184,7 @@ async def login(req: LoginReq):
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or not verify_password(req.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token(user['id'])
-    return AuthResponse(token=token, user=user_to_out(user))
+    return AuthResponse(token=create_token(user['id']), user=user_to_out(user))
 
 
 @api_router.get("/auth/me", response_model=UserOut)
@@ -209,7 +192,7 @@ async def me(user: dict = Depends(get_current_user)):
     return user_to_out(user)
 
 
-# ===== TAROT CARDS =====
+# ===== CARDS =====
 @api_router.get("/cards", response_model=List[TarotCard])
 async def list_cards():
     cards = await db.cards.find({}, {"_id": 0}).sort("number", 1).to_list(100)
@@ -238,11 +221,6 @@ async def get_lesson(lesson_id: str):
 
 
 # ===== QUIZ =====
-class QuizPublic(BaseModel):
-    id: str
-    lesson_id: str
-    questions: List[dict]  # without correct_index for public
-
 @api_router.get("/quizzes/{lesson_id}")
 async def get_quiz(lesson_id: str, user: dict = Depends(get_current_user)):
     quiz = await db.quizzes.find_one({"lesson_id": lesson_id}, {"_id": 0})
@@ -278,7 +256,6 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
 
     if passed:
         base_xp = lesson.get('xp_reward', 20)
-        # Bonus for perfect
         if correct == total:
             base_xp += 10
         xp_earned = base_xp
@@ -288,25 +265,20 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
 
     new_xp = user.get('xp', 0) + xp_earned
     new_level = xp_to_level(new_xp)
+    new_hearts = max(0, user.get('hearts', 5) - max(0, sub.hearts_lost))
 
-    # Hearts
-    current_hearts = user.get('hearts', 5)
-    new_hearts = max(0, current_hearts - max(0, sub.hearts_lost))
-
-    # Streak
     today = date.today().isoformat()
     last_active = user.get('last_active_date')
     current_streak = user.get('streak', 0)
     new_streak = current_streak
     if passed:
         if last_active == today:
-            pass  # already counted today
+            pass
         elif last_active is None:
             new_streak = 1
         else:
             try:
-                last_dt = date.fromisoformat(last_active)
-                delta_days = (date.today() - last_dt).days
+                delta_days = (date.today() - date.fromisoformat(last_active)).days
                 if delta_days == 1:
                     new_streak = current_streak + 1
                 elif delta_days == 0:
@@ -317,154 +289,514 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
                 new_streak = 1
 
     update = {
-        "xp": new_xp,
-        "level": new_level,
-        "hearts": new_hearts,
-        "streak": new_streak,
-        "completed_lessons": completed_lessons,
+        "xp": new_xp, "level": new_level, "hearts": new_hearts,
+        "streak": new_streak, "completed_lessons": completed_lessons,
     }
     if passed:
         update["last_active_date"] = today
-
     await db.users.update_one({"id": user['id']}, {"$set": update})
 
     return QuizResult(
-        correct=correct,
-        total=total,
-        xp_earned=xp_earned,
-        new_xp=new_xp,
-        new_level=new_level,
-        new_hearts=new_hearts,
-        new_streak=new_streak,
-        lesson_completed=lesson_completed,
+        correct=correct, total=total, xp_earned=xp_earned,
+        new_xp=new_xp, new_level=new_level, new_hearts=new_hearts,
+        new_streak=new_streak, lesson_completed=lesson_completed,
     )
 
 
-# ===== HEARTS REFILL (every quiz attempt entry) =====
 @api_router.post("/users/refill-hearts")
 async def refill_hearts(user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user['id']}, {"$set": {"hearts": 5}})
     return {"hearts": 5}
 
 
-# ===== PROGRESS =====
 @api_router.get("/users/progress")
 async def progress(user: dict = Depends(get_current_user)):
     total_lessons = await db.lessons.count_documents({})
     completed = len(user.get('completed_lessons', []))
     xp = user.get('xp', 0)
     level = user.get('level', 1)
-    # next level threshold
     thresholds = [0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700]
     next_threshold = thresholds[min(level, len(thresholds) - 1)] if level < len(thresholds) else thresholds[-1] + 300
     current_threshold = thresholds[level - 1] if level - 1 < len(thresholds) else thresholds[-1]
     return {
-        "xp": xp,
-        "level": level,
-        "current_level_xp": current_threshold,
-        "next_level_xp": next_threshold,
-        "hearts": user.get('hearts', 5),
-        "streak": user.get('streak', 0),
-        "completed_lessons": completed,
-        "total_lessons": total_lessons,
+        "xp": xp, "level": level,
+        "current_level_xp": current_threshold, "next_level_xp": next_threshold,
+        "hearts": user.get('hearts', 5), "streak": user.get('streak', 0),
+        "completed_lessons": completed, "total_lessons": total_lessons,
         "completion_pct": round((completed / total_lessons) * 100) if total_lessons else 0,
         "completed_lesson_ids": user.get('completed_lessons', []),
     }
 
 
-# ===== SEED =====
+# ===== SEED DATA — Rider-Waite-Smith deck (public domain, 1909) =====
+WIKI_BASE = "https://upload.wikimedia.org/wikipedia/commons"
+
 SEED_CARDS = [
     {
         "name": "The Fool", "number": 0, "arcana": "Major", "element": "Air",
-        "keywords_upright": ["beginnings", "innocence", "spontaneity"],
-        "keywords_reversed": ["recklessness", "naivety", "risk"],
-        "upright_meaning": "The Fool represents new beginnings, having faith in the future, being inexperienced, not knowing what to expect, and embracing the unknown with optimism.",
-        "reversed_meaning": "Reversed, the Fool warns of recklessness, foolish risks, holding back, and a fear of the unknown.",
-        "description": "A young figure stands at the edge of a cliff, ready to step into the unknown with only a small bag of belongings.",
         "image_emoji": "🃏",
+        "image_url": f"{WIKI_BASE}/9/90/RWS_Tarot_00_Fool.jpg",
+        "keywords_upright": ["beginnings", "innocence", "spontaneity", "free spirit", "leap of faith", "adventure"],
+        "keywords_reversed": ["recklessness", "naivety", "foolishness", "missed opportunity", "fear of change", "carelessness"],
+        "upright_meaning": "The Fool represents pure, unwritten potential — the moment before action, when anything is still possible. Drawing this card invites you to begin with an open heart, trust the unknown, and take that first uncertain step. It is the energy of the eternal beginner: curious, weightless, and unafraid of looking ridiculous in pursuit of something new.",
+        "reversed_meaning": "Reversed, the Fool warns that openness has tipped into recklessness. You may be ignoring real risks, refusing to plan, or repeating the same naive mistake. Alternatively, you might be so afraid of stumbling that you refuse to begin at all — paralyzed at the cliff's edge while the journey waits.",
+        "description": "A youthful figure stands at the edge of a high cliff, gazing upward into the sun with a white rose in one hand and a slim travel satchel slung over the shoulder. A small white dog leaps beside them, both companion and warning. Behind them rise distant snow-capped mountains; below them, an unseen drop.",
+        "symbolism": "The white rose signifies purity of intent — desire untainted by greed. The satchel, small enough to hold only essentials, suggests the Fool carries wisdom from past lives but not the weight of yesterday. The dog represents loyalty and instinct, both encouraging the leap and barking caution. The sun behind illuminates the path forward, while the cliff is the threshold between known and unknown — a sacred edge crossed by every hero.",
     },
     {
         "name": "The Magician", "number": 1, "arcana": "Major", "element": "Air",
-        "keywords_upright": ["manifestation", "willpower", "skill"],
-        "keywords_reversed": ["manipulation", "untapped talent", "illusion"],
-        "upright_meaning": "The Magician channels universal energies to manifest goals through skill, focus, and the four elements of the suits.",
-        "reversed_meaning": "Reversed, it suggests manipulation, poor planning, or hidden talents that go unused.",
-        "description": "A figure stands with one hand pointing up and the other down, surrounded by symbols of the four suits.",
         "image_emoji": "🪄",
+        "image_url": f"{WIKI_BASE}/d/de/RWS_Tarot_01_Magician.jpg",
+        "keywords_upright": ["manifestation", "willpower", "skill", "focus", "resourcefulness", "concentration", "action"],
+        "keywords_reversed": ["manipulation", "untapped talent", "poor planning", "deception", "illusion", "scattered energy"],
+        "upright_meaning": "The Magician is the conscious creator — proof that you already possess everything you need to bring a vision into form. With one hand reaching toward heaven and the other pointing to earth, this card affirms 'as above, so below': your inner intention shapes outer reality. Use this moment to focus your will, gather your tools, and act with precision.",
+        "reversed_meaning": "Reversed, the Magician suggests power misused or unrealized. Talents may lie dormant from self-doubt, or charisma may have curdled into manipulation and half-truths. Watch for plans that look bold but lack the discipline to execute, and beware of charmers (yourself included) selling illusions.",
+        "description": "A robed figure stands at an altar with one arm raised, holding a double-pointed wand to the sky, while the other arm points toward the earth. On the altar before them lie the four suit symbols — cup, pentacle, sword, and wand. Above the figure floats a lemniscate (infinity symbol), and a belt shaped like the ouroboros encircles the waist.",
+        "symbolism": "The four suits represent the four elements (water, earth, air, fire) and remind you that all the raw material of creation is already at your command. The lemniscate signifies infinite consciousness — divine inspiration flowing without end. The ouroboros belt (a snake eating its tail) symbolizes eternity and the unity of beginning and end. The dual gesture channels heavenly energy down into manifest reality.",
     },
     {
         "name": "The High Priestess", "number": 2, "arcana": "Major", "element": "Water",
-        "keywords_upright": ["intuition", "mystery", "subconscious"],
-        "keywords_reversed": ["secrets", "withdrawal", "disconnection"],
-        "upright_meaning": "The High Priestess invites you to listen to intuition and explore the inner world of the subconscious.",
-        "reversed_meaning": "Reversed, it warns of ignoring intuition or being out of touch with your inner self.",
-        "description": "A serene woman seated between two pillars, holding a scroll of sacred knowledge.",
         "image_emoji": "🌙",
+        "image_url": f"{WIKI_BASE}/8/88/RWS_Tarot_02_High_Priestess.jpg",
+        "keywords_upright": ["intuition", "mystery", "subconscious", "inner voice", "sacred knowledge", "stillness", "the divine feminine"],
+        "keywords_reversed": ["secrets", "withdrawal", "repressed feelings", "disconnection from intuition", "hidden agendas", "blocked psychic insight"],
+        "upright_meaning": "The High Priestess is the keeper of the veil between conscious and unconscious worlds. She does not give answers — she invites you to listen, dream, and wait. This card calls you to slow down and trust what you already know but cannot yet explain. Insight here comes in symbols, sleep, and silence, not in spreadsheets.",
+        "reversed_meaning": "Reversed, the Priestess suggests you have severed contact with your inner knowing — drowning intuition in noise, logic, or other people's opinions. It can also reveal secrets ready to surface, or a fear of looking inward at what you've buried. The pool has stilled because you refuse to approach it.",
+        "description": "A serene woman is seated between two pillars — one black (Boaz) and one white (Jachin) — at the entrance to a hidden temple. A crescent moon rests at her feet, a crown of crescents adorns her head, and she holds a partially concealed scroll labeled TORA. Behind her hangs a veil patterned with pomegranates, hinting at the mysteries beyond.",
+        "symbolism": "The black and white pillars represent duality — known and unknown, light and shadow — and the Priestess sits at the threshold. The pomegranate veil echoes Persephone's underworld pact, marking the cyclic descent into the subconscious. Her partially hidden scroll signifies that truth is revealed selectively, only to those who quiet themselves enough to hear. The moon connects her to tides, cycles, and the receptive mind.",
     },
     {
         "name": "The Empress", "number": 3, "arcana": "Major", "element": "Earth",
-        "keywords_upright": ["abundance", "nurturing", "fertility"],
-        "keywords_reversed": ["dependence", "smothering", "creative block"],
-        "upright_meaning": "The Empress symbolizes nurturing, abundance, creativity, and a deep connection to nature.",
-        "reversed_meaning": "Reversed, it can mean creative block, neglect, or overbearing care.",
-        "description": "A radiant figure crowned with stars, surrounded by lush nature.",
         "image_emoji": "👑",
+        "image_url": f"{WIKI_BASE}/d/d2/RWS_Tarot_03_Empress.jpg",
+        "keywords_upright": ["abundance", "nurturing", "fertility", "creativity", "sensuality", "nature", "maternal care"],
+        "keywords_reversed": ["dependence", "smothering", "creative block", "neglect", "burnout", "disconnection from body"],
+        "upright_meaning": "The Empress is the sovereign of the senses and the abundant earth. She rules through generosity rather than force — what she touches grows, ripens, and feeds others. Drawing this card invites you to slow down, savor, and create from a full vessel: nourish your body, beautify your space, tend a project as you would a garden, and remember that pleasure is not a detour but the destination.",
+        "reversed_meaning": "Reversed, the Empress signals a disrupted relationship with your own well-being and creative flow. Either you are overgiving — smothering loved ones, sacrificing yourself dry — or you have abandoned the gentle care your body, art, or home needs to thrive. Burnout, creative block, and feeling 'cut off' from joy are her warnings.",
+        "description": "A regal woman reclines on cushions in a sunlit field, crowned with twelve stars and wearing a flowing gown patterned with pomegranates. A heart-shaped shield bearing the symbol of Venus rests beside her. Golden wheat ripens at her feet, and behind her a forest opens into a flowing waterfall.",
+        "symbolism": "The twelve stars represent the twelve months and zodiac signs — the rhythms of nature she presides over. Pomegranates on her gown signify fertility and the seeds of future abundance. The Venus shield ties her to love, beauty, and the magnetism of desire. Ripening wheat and the waterfall behind her represent ongoing creation: nourishment that pours forth continuously when one is in harmony with natural law.",
     },
     {
         "name": "The Emperor", "number": 4, "arcana": "Major", "element": "Fire",
-        "keywords_upright": ["authority", "structure", "stability"],
-        "keywords_reversed": ["tyranny", "rigidity", "loss of control"],
-        "upright_meaning": "The Emperor represents structure, leadership, and the establishment of order and authority.",
-        "reversed_meaning": "Reversed, it warns of domineering control or weakness in leadership.",
-        "description": "A regal figure seated on a stone throne adorned with rams.",
         "image_emoji": "⚜️",
+        "image_url": f"{WIKI_BASE}/c/c3/RWS_Tarot_04_Emperor.jpg",
+        "keywords_upright": ["authority", "structure", "stability", "leadership", "discipline", "father figure", "command"],
+        "keywords_reversed": ["tyranny", "rigidity", "loss of control", "abuse of power", "stubbornness", "absent father"],
+        "upright_meaning": "The Emperor builds and protects what the Empress nourishes — he is order, law, and stable command. Drawing this card calls you to claim authority over your domain: set clear rules, plan with rigor, defend boundaries, and lead from grounded confidence rather than reaction. He reminds you that structure, in its right place, is a form of love.",
+        "reversed_meaning": "Reversed, the Emperor warns that authority has become domination. Rigidity, control issues, micromanagement, or an inability to delegate trust may all be at play. Alternatively, his reversal can speak of a missing or wounding father figure, an unstable foundation in your life, or a refusal to take responsibility when leadership is required.",
+        "description": "A stern, bearded ruler sits on a stone throne carved with four ram's heads, holding an ankh-tipped scepter in one hand and a globe in the other. He wears a crown and red robes over armor. Behind him rise barren, rust-colored mountains under a clear sky.",
+        "symbolism": "The ram heads connect him to Aries — initiating fire, courage, and pioneering will. The ankh scepter represents life under sovereignty; the globe in his other hand signifies dominion over manifest reality. His stone throne speaks of immovable foundations. The barren mountains behind him show that his rule extends even where life is hardest, and that his strength was forged through endurance, not gentleness.",
     },
     {
         "name": "The Lovers", "number": 6, "arcana": "Major", "element": "Air",
-        "keywords_upright": ["love", "harmony", "choices"],
-        "keywords_reversed": ["disharmony", "imbalance", "misalignment"],
-        "upright_meaning": "The Lovers symbolize meaningful connection, choices guided by values, and unity of opposites.",
-        "reversed_meaning": "Reversed, it signals conflict, broken trust, or misaligned values.",
-        "description": "Two figures stand beneath an angel, representing a union blessed from above.",
         "image_emoji": "💞",
+        "image_url": f"{WIKI_BASE}/3/3a/TheLovers.jpg",
+        "keywords_upright": ["love", "harmony", "choices", "alignment of values", "union", "partnership", "commitment"],
+        "keywords_reversed": ["disharmony", "imbalance", "misalignment", "broken trust", "indecision", "values conflict"],
+        "upright_meaning": "The Lovers represent more than romance — they signify any meaningful union and the conscious choice that sustains it. This card asks you to align your actions with what you truly value, choose with eyes open rather than longing, and recognize that real love (in any form) is the merging of opposites without either being erased. A pivotal choice often accompanies this card.",
+        "reversed_meaning": "Reversed, the Lovers warn of misalignment — between you and a partner, between your stated values and your behavior, or between head and heart. Trust may be fraying through small dishonesties, or you may be avoiding a decision that demands clarity. Reconnect with what you actually want, not what you've been told to want.",
+        "description": "A naked man and woman stand in a paradise, separated by a flowing stream. Above them, an angel with red wings (Raphael) spreads its arms in blessing, framed by sun and cloud. Behind the woman grows the tree of knowledge with its serpent; behind the man, the tree of life with twelve flames.",
+        "symbolism": "The angel Raphael — whose name means 'God heals' — blesses the union from above, signifying that conscious love is a healing force. The tree of knowledge (behind the woman) and tree of life (behind the man) recall Eden and represent the choice between innocence and wisdom that every committed relationship requires. The figures' nakedness is vulnerability without shame: love demands being fully seen.",
     },
     {
         "name": "The Star", "number": 17, "arcana": "Major", "element": "Air",
-        "keywords_upright": ["hope", "inspiration", "renewal"],
-        "keywords_reversed": ["despair", "lack of faith", "discouragement"],
-        "upright_meaning": "The Star brings hope, healing, and a renewed sense of purpose after difficult times.",
-        "reversed_meaning": "Reversed, it can signal hopelessness or lost faith.",
-        "description": "A figure pours water into a pool beneath a sky bright with stars.",
         "image_emoji": "⭐",
+        "image_url": f"{WIKI_BASE}/d/db/RWS_Tarot_17_Star.jpg",
+        "keywords_upright": ["hope", "inspiration", "renewal", "serenity", "spiritual guidance", "healing", "faith restored"],
+        "keywords_reversed": ["despair", "lack of faith", "discouragement", "hopelessness", "creative drought", "disconnection from purpose"],
+        "upright_meaning": "The Star arrives after the storm — she is the soft, certain light that returns when you thought it was gone. Drawing this card is a promise: you are being guided, healing is underway, and the long night has not been wasted. Trust the slow miracle. Pour what you have back into the world; there is more where it came from.",
+        "reversed_meaning": "Reversed, the Star reveals that hope has dimmed and the inner light feels far away. You may be exhausted from giving without replenishment, or so focused on what went wrong that you can no longer see what is gently rising. Faith is not lost — it is buried under fatigue. Stop, rest, and remember why you started.",
+        "description": "A nude woman kneels at the edge of a pool, one foot in the water and one on the land. She pours water from two jugs — one back into the pool, one onto the earth. Above her, one large eight-pointed star and seven smaller stars shine in a clear night sky. A bird perches on the tree behind her.",
+        "symbolism": "Her nakedness signifies that, after the upheaval of the preceding Tower card, all pretense has fallen away. The water poured into the pool returns to the source (the subconscious); the water poured on land nourishes outer life — a perfect balance of inner and outer giving. The eight-pointed star represents Venus or the eternal soul; the seven smaller stars are the chakras now realigned. The single foot in the water signifies one foot in intuition, one in the world.",
     },
     {
         "name": "The Moon", "number": 18, "arcana": "Major", "element": "Water",
-        "keywords_upright": ["illusion", "intuition", "dreams"],
-        "keywords_reversed": ["confusion lifted", "clarity", "release"],
-        "upright_meaning": "The Moon represents the subconscious, intuition, and the navigation of illusions and fears.",
-        "reversed_meaning": "Reversed, hidden truths come to light and confusion fades.",
-        "description": "A moon shines over a winding path between two towers, a dog and wolf howling below.",
         "image_emoji": "🌕",
+        "image_url": f"{WIKI_BASE}/7/7f/RWS_Tarot_18_Moon.jpg",
+        "keywords_upright": ["illusion", "intuition", "dreams", "subconscious", "uncertainty", "hidden fears", "psychic insight"],
+        "keywords_reversed": ["confusion lifted", "clarity", "release", "truth revealed", "anxiety eased", "fears confronted"],
+        "upright_meaning": "The Moon casts a beautiful, deceptive light. Things are not what they seem — and yet what stirs beneath the surface is real and worth your attention. This card asks you to walk the misty path anyway, feeling rather than seeing. Old fears, ancestral patterns, and prophetic dreams may all rise. Don't run from the howling — listen.",
+        "reversed_meaning": "Reversed, the Moon signals fog beginning to clear. Truths long obscured surface; what was projected onto others is recognized as your own. Anxieties named lose their grip. There may still be discomfort in seeing clearly, but the worst of the illusion is breaking.",
+        "description": "A full moon shines over a winding path that leads between two stone towers and disappears toward distant mountains. A dog and a wolf howl at the moon below. In the foreground, a crayfish crawls out of a pool, beginning the long journey of the path.",
+        "symbolism": "The two towers are the gates of the conscious world — what lies beyond them is the deep unconscious. The dog represents domesticated mind; the wolf, the wild instinct — both howling at the same mystery. The crayfish emerging from the pool is the most ancient part of the psyche, beginning its slow journey upward toward awareness. The moon's face — both kind and watchful — reminds you that the path of the unconscious illuminates by reflected light, not direct truth.",
     },
     {
         "name": "The Sun", "number": 19, "arcana": "Major", "element": "Fire",
-        "keywords_upright": ["joy", "success", "vitality"],
-        "keywords_reversed": ["temporary gloom", "overoptimism", "delays"],
-        "upright_meaning": "The Sun radiates vitality, positivity, and the joy of being fully present in your own light.",
-        "reversed_meaning": "Reversed, it suggests temporary clouds over your happiness or delays in success.",
-        "description": "A radiant sun shines over a child riding a white horse in a garden of sunflowers.",
         "image_emoji": "☀️",
+        "image_url": f"{WIKI_BASE}/1/17/RWS_Tarot_19_Sun.jpg",
+        "keywords_upright": ["joy", "success", "vitality", "clarity", "confidence", "warmth", "celebration"],
+        "keywords_reversed": ["temporary gloom", "delayed success", "overoptimism", "ego inflation", "burnout", "loss of enthusiasm"],
+        "upright_meaning": "The Sun is the most unambiguous yes in the deck — clarity, vitality, the warmth of being fully yourself in the open. Drawing this card affirms that the doubt of the Moon has lifted, and what is true about you can finally be seen. Celebrate without apology, share your warmth, and let yourself be witnessed in joy.",
+        "reversed_meaning": "Reversed, the Sun's brightness is dimmed — not extinguished. Success may be delayed, optimism may be papering over real concerns, or you may be performing happiness rather than feeling it. Alternatively, ego can outshine substance: too much certainty, not enough humility. Step into actual sunlight, not the idea of it.",
+        "description": "A radiant sun with a serene face shines high above a stone wall lined with sunflowers. A naked child sits on a white horse, arms outstretched, holding a red banner aloft. The child is crowned with a wreath and a single red feather.",
+        "symbolism": "The sun's anthropomorphic face symbolizes divine consciousness witnessing creation with joy. The white horse stands for purity, strength, and innocence harnessed; the child rides without saddle or fear. The red feather is the same feather worn by the Fool — a sign that innocence has matured into embodied truth without losing its spark. The sunflowers turn toward the child, suggesting that life itself reorients toward your authentic light when you stop hiding it.",
     },
     {
         "name": "The World", "number": 21, "arcana": "Major", "element": "Earth",
-        "keywords_upright": ["completion", "wholeness", "achievement"],
-        "keywords_reversed": ["incompletion", "loose ends", "shortcuts"],
-        "upright_meaning": "The World marks the completion of a cycle — wholeness, integration, and triumphant accomplishment.",
-        "reversed_meaning": "Reversed, it indicates unfinished business or seeking shortcuts to completion.",
-        "description": "A dancing figure floats in a wreath surrounded by four creatures of the elements.",
         "image_emoji": "🌍",
+        "image_url": f"{WIKI_BASE}/f/ff/RWS_Tarot_21_World.jpg",
+        "keywords_upright": ["completion", "wholeness", "achievement", "integration", "fulfillment", "travel", "graduation"],
+        "keywords_reversed": ["incompletion", "loose ends", "shortcuts", "stagnation", "unfinished business", "fear of closure"],
+        "upright_meaning": "The World marks the completion of a major cycle — the long journey of the Fool has reached its triumphant close. Drawing this card affirms that something significant has come full circle: integration achieved, lesson absorbed, mastery earned. Celebrate the wholeness, then notice the small gap in the wreath — every ending is also a doorway into the next, larger spiral.",
+        "reversed_meaning": "Reversed, the World suggests you are circling near completion but resisting the final step — fear of what comes next, attachment to the journey itself, or skipping the closure that would let you fully claim what you've built. Tie the loose ends. Acknowledge what you've achieved. Then the next door can open.",
+        "description": "A dancing figure floats inside an oval wreath of green laurel, draped with a violet sash and holding two wands. In the four corners of the card appear an angel, an eagle, a bull, and a lion — the four fixed signs of the zodiac and the four evangelists.",
+        "symbolism": "The dancing figure (often considered hermaphroditic) represents integrated wholeness — masculine and feminine, light and shadow, conscious and unconscious unified at last. The laurel wreath is the victor's crown, but it is open at the top and bottom, marking that completion is also a portal. The four creatures at the corners — angel (Aquarius), eagle (Scorpio), bull (Taurus), lion (Leo) — anchor the four elements and seasons, signifying mastery across every domain of life. The two wands echo the Magician's tool: what began with potential ends in realized power.",
     },
 ]
+
+
+CUSTOM_QUIZ_BY_NAME = {
+    "The Fool": [
+        {
+            "question": "You've been offered a job in a city you've never visited. The Fool appears in your reading. What is its core message to you?",
+            "options": [
+                "Wait for more certainty before saying yes",
+                "Begin with an open heart, even though the outcome is unknown",
+                "Refuse — the unknown is too risky",
+                "Demand a detailed plan before moving",
+            ],
+            "correct_index": 1,
+            "explanation": "The Fool is the energy of trusting the leap. It doesn't mean ignoring risk — it means stepping forward without demanding the journey be mapped in advance.",
+        },
+        {
+            "question": "Which scenario most clearly shows the Fool REVERSED?",
+            "options": [
+                "Starting a new creative project with thoughtful research",
+                "Quitting a stable job impulsively without any backup plan or savings",
+                "Pausing to reflect before a major decision",
+                "Listening to your inner voice before acting",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Fool is recklessness — openness curdled into refusing to plan or learn from past mistakes. Healthy beginnings still respect basic preparation.",
+        },
+        {
+            "question": "The Fool carries only a small satchel. What does this most powerfully symbolize?",
+            "options": [
+                "Poverty and being unprepared",
+                "That past wisdom is carried lightly — not as heavy baggage",
+                "Forgetfulness about what to pack",
+                "Inability to commit to a journey",
+            ],
+            "correct_index": 1,
+            "explanation": "The small bag suggests the Fool brings what is essential from past lives but is not weighed down by the past. Wisdom travels light.",
+        },
+    ],
+    "The Magician": [
+        {
+            "question": "You feel stuck on a project. The Magician appears upright. What is the most accurate reading?",
+            "options": [
+                "Wait — the universe will provide everything you need eventually",
+                "You already have all the tools you need; focus your will and act",
+                "Find someone more skilled to take it over",
+                "The project is doomed; choose a new one",
+            ],
+            "correct_index": 1,
+            "explanation": "The Magician's central teaching is that the four suits on his altar represent the elements already in your hands. He is conscious creation through focused action.",
+        },
+        {
+            "question": "Which behavior is the clearest warning sign of the Magician REVERSED?",
+            "options": [
+                "Practicing a skill quietly and patiently",
+                "Charismatically pitching a vision while privately knowing the numbers don't work",
+                "Asking for honest feedback on your work",
+                "Refining a craft over years",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Magician is power misused — charisma deployed to obscure truth, talent used to manipulate rather than manifest. The gift becomes a con.",
+        },
+        {
+            "question": "The Magician points one hand to the sky and one to the earth. What esoteric principle does this gesture express?",
+            "options": [
+                "Indecision between two paths",
+                "'As above, so below' — inner intention shapes outer form",
+                "Praying for help from higher powers",
+                "Balancing on uncertain ground",
+            ],
+            "correct_index": 1,
+            "explanation": "The dual gesture channels divine inspiration into manifest reality. It is the core hermetic principle the Magician embodies.",
+        },
+    ],
+    "The High Priestess": [
+        {
+            "question": "You face a decision and have done thorough research, but something still feels off. The High Priestess appears. What does she counsel?",
+            "options": [
+                "Do more research until logic provides a clear answer",
+                "Pause, listen inward, and trust what you sense beneath the data",
+                "Ask everyone in your life what they think",
+                "Pick the option with the most concrete evidence",
+            ],
+            "correct_index": 1,
+            "explanation": "The Priestess teaches that some answers arrive through stillness, dreams, and felt knowing — not more analysis. She rules the space logic cannot reach.",
+        },
+        {
+            "question": "Which situation BEST reflects the High Priestess REVERSED?",
+            "options": [
+                "Journaling regularly to track inner shifts",
+                "Numbing yourself with distractions whenever a gut feeling arises",
+                "Sleeping on a decision before responding",
+                "Asking a therapist to help process a dream",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed, the Priestess shows severed contact with intuition — drowning the inner voice in noise, scrolling, or relentless logic. The pool stays still because you refuse to look.",
+        },
+        {
+            "question": "The Priestess sits between a black and white pillar. What threshold do they mark?",
+            "options": [
+                "The border between two countries",
+                "The threshold between conscious and unconscious worlds",
+                "The line between good and evil people",
+                "Past and future timelines",
+            ],
+            "correct_index": 1,
+            "explanation": "The pillars (Boaz and Jachin) represent duality — known and unknown, light and shadow — and the Priestess guards the passage between them.",
+        },
+    ],
+    "The Empress": [
+        {
+            "question": "You feel creatively dry and physically depleted. The Empress appears upright. What is her core invitation?",
+            "options": [
+                "Push harder — discipline will break the block",
+                "Slow down, nourish yourself, and create from a full vessel",
+                "Compare your work to others to find inspiration",
+                "Abandon the project entirely",
+            ],
+            "correct_index": 1,
+            "explanation": "The Empress creates through abundance, not force. She insists that pleasure, rest, and sensual nourishment are prerequisites — not detours — to real creative flow.",
+        },
+        {
+            "question": "Which behavior most clearly signals the Empress REVERSED?",
+            "options": [
+                "Cooking yourself a meal you actually enjoy",
+                "Giving so much to others you've stopped tending to your own body",
+                "Tending a houseplant",
+                "Buying flowers for yourself",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Empress is the smothering caretaker — overgiving until self-care is abandoned, leading to burnout and creative shutdown. Care must include yourself.",
+        },
+        {
+            "question": "The Empress wears a crown of twelve stars. What do they most likely represent?",
+            "options": [
+                "Twelve children she has raised",
+                "The twelve zodiac signs and natural cycles she presides over",
+                "The twelve apostles",
+                "Twelve years of training",
+            ],
+            "correct_index": 1,
+            "explanation": "The twelve stars connect her to the zodiac and the rhythms of the natural year — the cycles of growth, fruit, and rest that she embodies.",
+        },
+    ],
+    "The Emperor": [
+        {
+            "question": "Your team is failing because no one knows who is responsible for what. The Emperor appears upright. What does he urge?",
+            "options": [
+                "Let things sort themselves out organically",
+                "Establish clear structure, roles, and boundaries — lead from grounded authority",
+                "Replace everyone immediately",
+                "Become more emotionally available to bond with the team",
+            ],
+            "correct_index": 1,
+            "explanation": "The Emperor's gift is order. He teaches that clear structure, ownership, and benevolent command are forms of care — they make ambiguity safe to navigate.",
+        },
+        {
+            "question": "Which behavior is the clearest sign of the Emperor REVERSED?",
+            "options": [
+                "Listening to feedback before adjusting a plan",
+                "Insisting on the rules even when reality has obviously changed",
+                "Delegating responsibility to a capable team member",
+                "Setting healthy boundaries with a colleague",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Emperor is rigidity — structure becomes tyranny when it can no longer adapt. Authority frozen into stubbornness loses its protective purpose.",
+        },
+        {
+            "question": "The Emperor's throne is carved with rams. Which zodiac sign and quality does this connect him to?",
+            "options": [
+                "Cancer — nurturing emotion",
+                "Aries — pioneering, initiating fire",
+                "Pisces — dreamy intuition",
+                "Libra — diplomatic balance",
+            ],
+            "correct_index": 1,
+            "explanation": "The ram is Aries, the first sign of the zodiac — initiating fire, courage, and the will to begin and build. The Emperor channels this drive into stable rule.",
+        },
+    ],
+    "The Lovers": [
+        {
+            "question": "You're considering a major partnership (romantic or business). The Lovers appears upright. What does the card emphasize most?",
+            "options": [
+                "Physical attraction is the only thing that matters",
+                "Align the choice with your true values — conscious commitment matters more than chemistry",
+                "Avoid commitment to stay free",
+                "Wait until you feel zero doubt",
+            ],
+            "correct_index": 1,
+            "explanation": "The Lovers represent meaningful union AND the conscious choice to sustain it. The card is fundamentally about values-aligned commitment, not just feeling.",
+        },
+        {
+            "question": "Which scenario most clearly reflects the Lovers REVERSED?",
+            "options": [
+                "Having a difficult honest conversation with a partner",
+                "Acting kindly in public while privately resenting the relationship",
+                "Choosing time alone to reflect on what you want",
+                "Saying no to a relationship that doesn't fit",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Lovers signal misalignment — between values and behavior, between what you say and what you do. Small dishonesties fray the bond.",
+        },
+        {
+            "question": "An angel blesses the figures from above. What does this presence signify?",
+            "options": [
+                "The relationship is approved by religious authorities",
+                "Conscious love is itself a healing, spiritual force",
+                "An external rescuer will save the relationship",
+                "Romance is doomed without divine luck",
+            ],
+            "correct_index": 1,
+            "explanation": "The angel (Raphael, 'God heals') represents that true union — entered consciously — is a spiritual and healing act, not merely a contract.",
+        },
+    ],
+    "The Star": [
+        {
+            "question": "You've just come through a difficult period and feel fragile. The Star appears upright. What is its central message?",
+            "options": [
+                "More hardship is on the way; stay defensive",
+                "Healing is underway; trust the slow restoration of hope",
+                "You should have prevented the difficulty",
+                "Avoid all risk for the next year",
+            ],
+            "correct_index": 1,
+            "explanation": "The Star follows the Tower's upheaval. Her teaching is that quiet restoration has begun — hope returns gently, and what feels fragile is actually new growth.",
+        },
+        {
+            "question": "Which situation BEST reflects the Star REVERSED?",
+            "options": [
+                "Taking a rest day after a hard week",
+                "Believing things will never improve, no matter what you do",
+                "Asking for help when overwhelmed",
+                "Lowering your expectations realistically",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Star is the loss of hope — faith buried under fatigue. Not 'cautious realism' but the inner light feeling extinguished.",
+        },
+        {
+            "question": "The Star pours water both into the pool and onto the land. What does this dual gesture symbolize?",
+            "options": [
+                "Wasted effort flowing in two directions",
+                "A perfect balance between nourishing inner life (the subconscious) and outer life (the world)",
+                "She's confused about where to pour",
+                "Wasting resources by spreading them too thin",
+            ],
+            "correct_index": 1,
+            "explanation": "Water into the pool returns to the subconscious source; water on land nourishes outer life. Together they show generosity that doesn't deplete because it's circular.",
+        },
+    ],
+    "The Moon": [
+        {
+            "question": "You feel anxious about a relationship but can't pinpoint why. The Moon appears upright. What does it advise?",
+            "options": [
+                "Ignore the feeling — it's irrational",
+                "The vague unease is real intuition; listen to it without demanding immediate clarity",
+                "Confront the other person aggressively",
+                "Look at the surface story; the truth is obvious",
+            ],
+            "correct_index": 1,
+            "explanation": "The Moon teaches that uneasy intuition deserves attention, even before logic can explain it. Walk the misty path; clarity comes through staying present, not running.",
+        },
+        {
+            "question": "Which scenario most clearly reflects the Moon REVERSED?",
+            "options": [
+                "A long-held fear is finally named and loses its grip",
+                "Your dreams become more cryptic and unsettling",
+                "You doubt your own instincts more than usual",
+                "You see hidden threats everywhere",
+            ],
+            "correct_index": 0,
+            "explanation": "Reversed Moon signals the fog clearing — illusions named, anxieties confronted, projections recognized. The mist lifts.",
+        },
+        {
+            "question": "A crayfish emerges from the pool in the foreground. What does this most powerfully represent?",
+            "options": [
+                "An unrelated decorative detail",
+                "The most ancient part of the psyche beginning its slow rise toward awareness",
+                "Danger lurking in the water",
+                "A failed metamorphosis",
+            ],
+            "correct_index": 1,
+            "explanation": "The crayfish is the primitive unconscious — instinct, memory, old self — beginning the long journey upward through the moonlit path of awareness.",
+        },
+    ],
+    "The Sun": [
+        {
+            "question": "After a long, foggy chapter, the Sun appears upright in your reading. What is its central affirmation?",
+            "options": [
+                "Stay cautious — the brightness won't last",
+                "Clarity has returned; let yourself be seen and celebrate without apology",
+                "Hide your success to avoid envy",
+                "Don't trust the good feeling",
+            ],
+            "correct_index": 1,
+            "explanation": "The Sun is the most unambiguous yes in the deck. After the Moon's confusion, this card affirms truth has returned and joy can be expressed openly.",
+        },
+        {
+            "question": "Which behavior is the clearest sign of the Sun REVERSED?",
+            "options": [
+                "Genuinely enjoying a quiet accomplishment",
+                "Performing happiness on social media while privately exhausted",
+                "Celebrating a friend's win",
+                "Resting after success",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed Sun is dimmed brightness — performing joy rather than feeling it, or papering over real concerns with forced optimism.",
+        },
+        {
+            "question": "The child on the Sun card wears the same red feather the Fool wore. What does this connection mean?",
+            "options": [
+                "It's a coincidence in the artwork",
+                "Innocence has matured into embodied truth without losing its spark",
+                "The child is the Fool's younger sibling",
+                "Red is just the artist's favorite color",
+            ],
+            "correct_index": 1,
+            "explanation": "The shared red feather links the Sun's child to the Fool's beginning — but here innocence has been seasoned by the whole journey. Wholeness is innocence regained on the other side of experience.",
+        },
+    ],
+    "The World": [
+        {
+            "question": "You've just finished a major life chapter. The World appears upright. What is its essential message?",
+            "options": [
+                "There is nothing more to accomplish; rest forever",
+                "A real cycle has closed — acknowledge the wholeness before the next, larger spiral opens",
+                "Start a brand new chapter immediately without reflection",
+                "Your achievement was a coincidence",
+            ],
+            "correct_index": 1,
+            "explanation": "The World marks genuine completion AND the doorway to the next spiral. The card insists on honoring closure — wholeness is the threshold to what's next.",
+        },
+        {
+            "question": "Which situation most clearly reflects the World REVERSED?",
+            "options": [
+                "Completing a project thoroughly and celebrating it",
+                "Almost finishing a project but always finding 'one more thing' to avoid closure",
+                "Knowing when a chapter has truly ended",
+                "Reflecting on lessons learned",
+            ],
+            "correct_index": 1,
+            "explanation": "Reversed World is the avoidance of completion — circling near the end but refusing to step through. Loose ends become a strategy to avoid the unknown that follows.",
+        },
+        {
+            "question": "The figure dances inside a wreath that is open at top and bottom. What does this opening signify?",
+            "options": [
+                "A flaw in the artist's design",
+                "Every completion is also a portal — wholeness includes the next beginning",
+                "The wreath is unfinished",
+                "An escape route from the dance",
+            ],
+            "correct_index": 1,
+            "explanation": "The gaps in the wreath remind you that every cycle's end is also a door. Completion is not stagnation — it is the threshold to a larger spiral.",
+        },
+    ],
+}
 
 
 def make_lesson_for_card(card: dict, order: int) -> dict:
@@ -472,94 +804,42 @@ def make_lesson_for_card(card: dict, order: int) -> dict:
         "id": str(uuid.uuid4()),
         "card_id": card['id'],
         "order": order,
-        "title": f"{card['name']} — Lesson {order + 1}",
-        "intro": f"Discover {card['name']}, a card of {', '.join(card['keywords_upright'][:2])}.",
+        "title": f"Lesson {order + 1} · {card['name']}",
+        "intro": f"Discover {card['name']}",
+        "subtitle": f"A card of {', '.join(card['keywords_upright'][:2])}",
         "sections": [
-            {"heading": "The Imagery", "body": card['description']},
+            {"heading": "Imagery & Symbolism", "body": card['description'] + "\n\n" + card['symbolism']},
             {"heading": "Upright Meaning", "body": card['upright_meaning']},
             {"heading": "Reversed Meaning", "body": card['reversed_meaning']},
-            {"heading": "Keywords", "body": "Upright: " + ", ".join(card['keywords_upright']) + "  •  Reversed: " + ", ".join(card['keywords_reversed'])},
+            {"heading": "Keywords to Remember", "body": "Upright: " + ", ".join(card['keywords_upright']) + "\n\nReversed: " + ", ".join(card['keywords_reversed'])},
         ],
-        "xp_reward": 20,
+        "xp_reward": 25,
     }
 
 
-def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict]) -> dict:
-    # 3 questions per quiz
-    # q1: keyword identification
-    correct_kw = card['keywords_upright'][0]
-    distractors = []
-    for oc in other_cards:
-        if oc['id'] != card['id']:
-            for kw in oc['keywords_upright']:
-                if kw not in card['keywords_upright'] and kw not in distractors:
-                    distractors.append(kw)
-                    break
-        if len(distractors) >= 3:
-            break
-    opts1 = [correct_kw] + distractors[:3]
-    # shuffle deterministically by sort
-    opts1_sorted = sorted(opts1)
-    correct1 = opts1_sorted.index(correct_kw)
-
-    # q2: identify card by description
-    correct_name = card['name']
-    name_distractors = [oc['name'] for oc in other_cards if oc['id'] != card['id']][:3]
-    opts2 = [correct_name] + name_distractors
-    opts2_sorted = sorted(opts2)
-    correct2 = opts2_sorted.index(correct_name)
-    snippet = card['upright_meaning'].split('.')[0]
-
-    # q3: reversed meaning keyword
-    correct_rev = card['keywords_reversed'][0]
-    rev_distractors = []
-    for oc in other_cards:
-        if oc['id'] != card['id']:
-            for kw in oc['keywords_reversed']:
-                if kw not in card['keywords_reversed'] and kw not in rev_distractors:
-                    rev_distractors.append(kw)
-                    break
-        if len(rev_distractors) >= 3:
-            break
-    opts3 = [correct_rev] + rev_distractors[:3]
-    opts3_sorted = sorted(opts3)
-    correct3 = opts3_sorted.index(correct_rev)
-
+def make_quiz_for_card(card: dict, lesson_id: str) -> dict:
+    qs = CUSTOM_QUIZ_BY_NAME.get(card['name'], [])
     return {
         "id": str(uuid.uuid4()),
         "lesson_id": lesson_id,
         "questions": [
-            {
-                "id": str(uuid.uuid4()),
-                "question": f"Which keyword best represents {card['name']} (upright)?",
-                "options": opts1_sorted,
-                "correct_index": correct1,
-                "explanation": f"{card['name']} is strongly associated with '{correct_kw}'.",
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "question": f"Which card matches this meaning: \"{snippet}.\"?",
-                "options": opts2_sorted,
-                "correct_index": correct2,
-                "explanation": f"This describes {card['name']}.",
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "question": f"What does {card['name']} suggest when reversed?",
-                "options": opts3_sorted,
-                "correct_index": correct3,
-                "explanation": f"Reversed, {card['name']} evokes '{correct_rev}'.",
-            },
+            {"id": str(uuid.uuid4()), **q} for q in qs
         ],
     }
 
 
 @app.on_event("startup")
 async def seed_data():
-    count = await db.cards.count_documents({})
-    if count > 0:
+    meta = await db.meta.find_one({"_id": "seed"}) or {}
+    current = meta.get("version", 0)
+    if current >= SEED_VERSION:
         return
-    logger.info("Seeding tarot cards, lessons, quizzes...")
+    logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
+    await db.cards.delete_many({})
+    await db.lessons.delete_many({})
+    await db.quizzes.delete_many({})
+    await db.users.update_many({}, {"$set": {"completed_lessons": []}})
+
     seeded_cards = []
     for c in SEED_CARDS:
         doc = {**c, "id": str(uuid.uuid4())}
@@ -571,9 +851,11 @@ async def seed_data():
         lesson = make_lesson_for_card(card, idx)
         await db.lessons.insert_one(lesson)
         lesson.pop('_id', None)
-        quiz = make_quiz_for_card(card, lesson['id'], seeded_cards)
+        quiz = make_quiz_for_card(card, lesson['id'])
         await db.quizzes.insert_one(quiz)
-    logger.info("Seed complete.")
+
+    await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
+    logger.info("Re-seed complete.")
 
 
 @api_router.get("/")
@@ -581,22 +863,15 @@ async def root():
     return {"message": "Mystic Tarot API", "status": "ok"}
 
 
-# Include router
 app.include_router(api_router)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True, allow_origins=["*"],
+    allow_methods=["*"], allow_headers=["*"],
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 @app.on_event("shutdown")

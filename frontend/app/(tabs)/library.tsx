@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, fonts } from "@/src/theme";
 import { api, Card } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
+
+function toRoman(n: number): string {
+  if (n === 0) return "0";
+  const map: [number, string][] = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  let out = ""; let v = n;
+  for (const [val, sym] of map) {
+    while (v >= val) { out += sym; v -= val; }
+  }
+  return out;
+}
 
 export default function Library() {
   const router = useRouter();
@@ -47,11 +57,10 @@ export default function Library() {
                 onPress={() => router.push(`/card/${item.id}`)}
                 testID={`card-${index}`}
               >
-                <View style={styles.cardInner}>
-                  <Text style={styles.cardNum}>{String(item.number).padStart(2, "0")}</Text>
-                  <Text style={styles.cardEmoji}>{item.image_emoji}</Text>
+                <Image source={{ uri: item.image_url }} style={styles.cardImage} resizeMode="cover" />
+                <View style={styles.cardFooter}>
+                  <Text style={styles.cardRoman}>{toRoman(item.number)}</Text>
                   <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.cardKw} numberOfLines={1}>{item.keywords_upright[0]}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -71,15 +80,18 @@ const styles = StyleSheet.create({
   list: { padding: 20, gap: 14, paddingBottom: 80 },
   card: {
     flex: 1,
-    aspectRatio: 0.72,
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     borderWidth: 1, borderColor: colors.border,
     overflow: "hidden",
   },
-  cardInner: { flex: 1, padding: 14, alignItems: "center", justifyContent: "space-between" },
-  cardNum: { color: colors.gold, fontFamily: fonts.display, fontSize: 18, alignSelf: "flex-start" },
-  cardEmoji: { fontSize: 64 },
-  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 16, textAlign: "center" },
-  cardKw: { color: colors.textSecondary, fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2 },
+  cardImage: { width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
+  cardFooter: {
+    paddingVertical: 10, paddingHorizontal: 10,
+    backgroundColor: colors.bg2,
+    alignItems: "center", gap: 2,
+    borderTopWidth: 1, borderTopColor: colors.borderSoft,
+  },
+  cardRoman: { color: colors.gold, fontFamily: fonts.display, fontSize: 13, letterSpacing: 3 },
+  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 13, textAlign: "center", letterSpacing: 1.5 },
 });

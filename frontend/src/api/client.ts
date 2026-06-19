@@ -98,7 +98,9 @@ export type Card = {
   upright_meaning: string;
   reversed_meaning: string;
   description: string;
+  symbolism: string;
   image_emoji: string;
+  image_url: string;
   element: string;
 };
 
@@ -108,6 +110,7 @@ export type Lesson = {
   order: number;
   title: string;
   intro: string;
+  subtitle: string;
   sections: { heading: string; body: string }[];
   xp_reward: number;
 };
