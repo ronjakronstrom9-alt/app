@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -128,7 +128,14 @@ export default function Home() {
                       ]}
                       testID={`lesson-node-${idx}`}
                     >
-                      <Text style={styles.nodeEmoji}>{card?.image_emoji || "🃏"}</Text>
+                      {card?.image_url ? (
+                        <Image
+                          source={{ uri: card.image_url }}
+                          style={styles.nodeImage}
+                        />
+                      ) : (
+                        <Text style={styles.nodeEmoji}>🃏</Text>
+                      )}
                       {isCompleted && (
                         <View style={styles.checkBadge}>
                           <Ionicons name="checkmark" size={14} color={colors.bg} />
@@ -198,15 +205,17 @@ const styles = StyleSheet.create({
     top: -28, height: 28, width: 2, borderLeftWidth: 2, borderColor: colors.gold,
   },
   node: {
-    width: 84, height: 84, borderRadius: 999,
+    width: 88, height: 124, borderRadius: 14,
     backgroundColor: colors.surface,
     alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: colors.borderSoft,
     marginLeft: 24, marginRight: 24,
+    overflow: "hidden",
   },
-  nodeCompleted: { backgroundColor: colors.gold, borderColor: colors.goldGlow },
+  nodeCompleted: { borderColor: colors.goldGlow },
   nodeCurrent: { borderColor: colors.gold, backgroundColor: colors.surface2 },
   nodeLocked: { backgroundColor: colors.surface2, borderColor: colors.violet, opacity: 0.7 },
+  nodeImage: { width: "100%", height: "100%" },
   nodeEmoji: { fontSize: 38 },
   checkBadge: {
     position: "absolute", bottom: -4, right: -4, width: 24, height: 24,
