@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { colors, fonts } from "@/src/theme";
-import { api, Card } from "@/src/api/client";
+import { api, Card, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 
 function toRoman(n: number): string {
@@ -57,7 +57,7 @@ export default function Library() {
                 onPress={() => router.push(`/card/${item.id}`)}
                 testID={`card-${index}`}
               >
-                <Image source={{ uri: item.image_url }} style={styles.cardImage} resizeMode="cover" />
+                <Image source={{ uri: imageUri(item.image_url) }} style={styles.cardImage} resizeMode="cover" />
                 <View style={styles.cardFooter}>
                   <Text style={styles.cardRoman}>{toRoman(item.number)}</Text>
                   <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>

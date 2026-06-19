@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
-import { api, Card, Lesson } from "@/src/api/client";
+import { api, Card, Lesson, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 
 export default function LessonScreen() {
@@ -65,7 +65,7 @@ export default function LessonScreen() {
           {isIntro ? (
             <View style={styles.introBlock}>
               <View style={styles.cardFrame}>
-                <Image source={{ uri: card.image_url }} style={styles.cardImage} resizeMode="cover" />
+                <Image source={{ uri: imageUri(card.image_url) }} style={styles.cardImage} resizeMode="cover" />
                 <View style={styles.cardFooter}>
                   <Text style={styles.cardFooterRoman}>
                     {toRoman(card.number)}

@@ -5,6 +5,12 @@ const API = `${BASE}/api`;
 
 const TOKEN_KEY = "mt_token";
 
+export function imageUri(url: string | undefined | null): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${BASE}${url}`;
+}
+
 async function getToken(): Promise<string | null> {
   return (await storage.secureGet<string>(TOKEN_KEY, "")) || null;
 }

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
-import { api, Card } from "@/src/api/client";
+import { api, Card, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 
 function toRoman(n: number): string {
@@ -61,7 +61,7 @@ export default function CardDetail() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.cardFrame}>
             <View style={[styles.cardImageWrap, reversed && { transform: [{ rotate: "180deg" }] }]}>
-              <Image source={{ uri: card.image_url }} style={styles.cardImage} resizeMode="cover" />
+              <Image source={{ uri: imageUri(card.image_url) }} style={styles.cardImage} resizeMode="cover" />
             </View>
             <View style={styles.cardFooter}>
               <Text style={styles.cardRoman}>{toRoman(card.number)}</Text>

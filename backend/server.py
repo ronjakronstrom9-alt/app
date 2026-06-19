@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,6 +13,7 @@ import uuid
 from datetime import datetime, timedelta, timezone, date
 import bcrypt
 import jwt as pyjwt
+import urllib.request
 
 
 ROOT_DIR = Path(__file__).parent
@@ -24,7 +26,10 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
-SEED_VERSION = 2  # bump to re-seed
+SEED_VERSION = 3  # bump to re-seed
+
+STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
+STATIC_CARDS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -330,6 +335,40 @@ async def progress(user: dict = Depends(get_current_user)):
 
 # ===== SEED DATA — Rider-Waite-Smith deck (public domain, 1909) =====
 WIKI_BASE = "https://upload.wikimedia.org/wikipedia/commons"
+
+# Wikimedia source URLs and local filename slugs per card
+WIKI_SOURCES = {
+    "The Fool":          ("9/90/RWS_Tarot_00_Fool.jpg",          "00-fool.jpg"),
+    "The Magician":      ("d/de/RWS_Tarot_01_Magician.jpg",      "01-magician.jpg"),
+    "The High Priestess":("8/88/RWS_Tarot_02_High_Priestess.jpg","02-high-priestess.jpg"),
+    "The Empress":       ("d/d2/RWS_Tarot_03_Empress.jpg",       "03-empress.jpg"),
+    "The Emperor":       ("c/c3/RWS_Tarot_04_Emperor.jpg",       "04-emperor.jpg"),
+    "The Lovers":        ("d/db/RWS_Tarot_06_Lovers.jpg",        "06-lovers.jpg"),
+    "The Star":          ("d/db/RWS_Tarot_17_Star.jpg",          "17-star.jpg"),
+    "The Moon":          ("7/7f/RWS_Tarot_18_Moon.jpg",          "18-moon.jpg"),
+    "The Sun":           ("1/17/RWS_Tarot_19_Sun.jpg",           "19-sun.jpg"),
+    "The World":         ("f/ff/RWS_Tarot_21_World.jpg",         "21-world.jpg"),
+}
+
+
+def download_card_images():
+    """Download Wikimedia images to local static folder so the mobile client
+    can fetch them from our own backend (no external CDN dependency)."""
+    for name, (path, fname) in WIKI_SOURCES.items():
+        dest = STATIC_CARDS_DIR / fname
+        if dest.exists() and dest.stat().st_size > 10000:
+            continue
+        url = f"{WIKI_BASE}/{path}"
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "MysticXP-Tarot-App/1.0 (educational; contact@mystic.app)"
+            })
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            dest.write_bytes(data)
+            logger.info(f"Downloaded {fname} ({len(data)} bytes)")
+        except Exception as e:
+            logger.warning(f"Failed to download {fname}: {e}")
 
 SEED_CARDS = [
     {
@@ -830,9 +869,14 @@ def make_quiz_for_card(card: dict, lesson_id: str) -> dict:
 
 @app.on_event("startup")
 async def seed_data():
+    # Always ensure images are downloaded locally (independent of seed version)
+    download_card_images()
+
     meta = await db.meta.find_one({"_id": "seed"}) or {}
     current = meta.get("version", 0)
     if current >= SEED_VERSION:
+        # Even on cached seed, repoint card image URLs to local static (one-time migration)
+        await _repoint_card_images()
         return
     logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
     await db.cards.delete_many({})
@@ -843,6 +887,10 @@ async def seed_data():
     seeded_cards = []
     for c in SEED_CARDS:
         doc = {**c, "id": str(uuid.uuid4())}
+        # Rewrite image_url to point to our backend's static folder
+        slug_pair = WIKI_SOURCES.get(doc['name'])
+        if slug_pair:
+            doc['image_url'] = f"/api/static/cards/{slug_pair[1]}"
         await db.cards.insert_one(doc)
         doc.pop('_id', None)
         seeded_cards.append(doc)
@@ -858,12 +906,24 @@ async def seed_data():
     logger.info("Re-seed complete.")
 
 
+async def _repoint_card_images():
+    """Update existing cards' image_url to use local static path."""
+    async for c in db.cards.find({}, {"_id": 0, "id": 1, "name": 1, "image_url": 1}):
+        slug_pair = WIKI_SOURCES.get(c.get('name'))
+        if not slug_pair:
+            continue
+        desired = f"/api/static/cards/{slug_pair[1]}"
+        if c.get('image_url') != desired:
+            await db.cards.update_one({"id": c['id']}, {"$set": {"image_url": desired}})
+
+
 @api_router.get("/")
 async def root():
     return {"message": "Mystic Tarot API", "status": "ok"}
 
 
 app.include_router(api_router)
+app.mount("/api/static/cards", StaticFiles(directory=str(STATIC_CARDS_DIR)), name="static_cards")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True, allow_origins=["*"],

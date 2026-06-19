@@ -8,7 +8,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
-import { api, Card, Lesson } from "@/src/api/client";
+import { api, Card, Lesson, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 
 export default function Home() {
@@ -130,7 +130,7 @@ export default function Home() {
                     >
                       {card?.image_url ? (
                         <Image
-                          source={{ uri: card.image_url }}
+                          source={{ uri: imageUri(card.image_url) }}
                           style={styles.nodeImage}
                         />
                       ) : (
