@@ -26,7 +26,7 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
-SEED_VERSION = 3  # bump to re-seed
+SEED_VERSION = 5  # bump to re-seed
 
 STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
 STATIC_CARDS_DIR.mkdir(exist_ok=True)
@@ -343,10 +343,22 @@ WIKI_SOURCES = {
     "The High Priestess":("8/88/RWS_Tarot_02_High_Priestess.jpg","02-high-priestess.jpg"),
     "The Empress":       ("d/d2/RWS_Tarot_03_Empress.jpg",       "03-empress.jpg"),
     "The Emperor":       ("c/c3/RWS_Tarot_04_Emperor.jpg",       "04-emperor.jpg"),
+    "The Hierophant":    ("8/8d/RWS_Tarot_05_Hierophant.jpg",    "05-hierophant.jpg"),
     "The Lovers":        ("d/db/RWS_Tarot_06_Lovers.jpg",        "06-lovers.jpg"),
+    "The Chariot":       ("9/9b/RWS_Tarot_07_Chariot.jpg",       "07-chariot.jpg"),
+    "Strength":          ("f/f5/RWS_Tarot_08_Strength.jpg",      "08-strength.jpg"),
+    "The Hermit":        ("4/4d/RWS_Tarot_09_Hermit.jpg",        "09-hermit.jpg"),
+    "Wheel of Fortune":  ("3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg","10-wheel-of-fortune.jpg"),
+    "Justice":           ("e/e0/RWS_Tarot_11_Justice.jpg",       "11-justice.jpg"),
+    "The Hanged Man":    ("2/2b/RWS_Tarot_12_Hanged_Man.jpg",    "12-hanged-man.jpg"),
+    "Death":             ("d/d7/RWS_Tarot_13_Death.jpg",         "13-death.jpg"),
+    "Temperance":        ("f/f8/RWS_Tarot_14_Temperance.jpg",    "14-temperance.jpg"),
+    "The Devil":         ("5/55/RWS_Tarot_15_Devil.jpg",         "15-devil.jpg"),
+    "The Tower":         ("5/53/RWS_Tarot_16_Tower.jpg",         "16-tower.jpg"),
     "The Star":          ("d/db/RWS_Tarot_17_Star.jpg",          "17-star.jpg"),
     "The Moon":          ("7/7f/RWS_Tarot_18_Moon.jpg",          "18-moon.jpg"),
     "The Sun":           ("1/17/RWS_Tarot_19_Sun.jpg",           "19-sun.jpg"),
+    "Judgement":         ("d/dd/RWS_Tarot_20_Judgement.jpg",     "20-judgement.jpg"),
     "The World":         ("f/ff/RWS_Tarot_21_World.jpg",         "21-world.jpg"),
 }
 
@@ -480,6 +492,138 @@ SEED_CARDS = [
         "reversed_meaning": "Reversed, the World suggests you are circling near completion but resisting the final step — fear of what comes next, attachment to the journey itself, or skipping the closure that would let you fully claim what you've built. Tie the loose ends. Acknowledge what you've achieved. Then the next door can open.",
         "description": "A dancing figure floats inside an oval wreath of green laurel, draped with a violet sash and holding two wands. In the four corners of the card appear an angel, an eagle, a bull, and a lion — the four fixed signs of the zodiac and the four evangelists.",
         "symbolism": "The dancing figure (often considered hermaphroditic) represents integrated wholeness — masculine and feminine, light and shadow, conscious and unconscious unified at last. The laurel wreath is the victor's crown, but it is open at the top and bottom, marking that completion is also a portal. The four creatures at the corners — angel (Aquarius), eagle (Scorpio), bull (Taurus), lion (Leo) — anchor the four elements and seasons, signifying mastery across every domain of life. The two wands echo the Magician's tool: what began with potential ends in realized power.",
+    },
+    {
+        "name": "The Hierophant", "number": 5, "arcana": "Major", "element": "Earth",
+        "image_emoji": "⛪",
+        "image_url": f"{WIKI_BASE}/8/8d/RWS_Tarot_05_Hierophant.jpg",
+        "keywords_upright": ["tradition", "spiritual teacher", "conformity", "doctrine", "ritual", "institutions", "mentorship"],
+        "keywords_reversed": ["rebellion", "unconventional", "breaking tradition", "personal beliefs", "freedom", "dogma rejected"],
+        "upright_meaning": "The Hierophant is the keeper of established wisdom — religion, mentorship, marriage, school, the tested paths that came before you. Drawing this card invites you to learn from tradition rather than reinvent the wheel: find a teacher, join a community, accept a rite of passage. There is power in being part of something older than yourself.",
+        "reversed_meaning": "Reversed, the Hierophant signals time to step outside the institution — to question doctrine, leave the orthodox path, or trust your own spiritual authority. Inherited rules may have become cages; what was once meaningful ritual has hollowed into performance. Listen to the part of you that won't kneel.",
+        "description": "A robed religious figure crowned with a triple tiara sits between two stone pillars, raising one hand in blessing and holding a triple-cross staff in the other. Two tonsured monks kneel before him on a black-and-white tiled floor; crossed keys lie at his feet.",
+        "symbolism": "The triple crown and triple cross represent the three worlds — physical, mental, and spiritual — over which the Hierophant claims authority. The two pillars echo the High Priestess but are now solid stone, not veiled: institutional truth replaces intuitive mystery. The crossed keys at his feet symbolize the keys to heaven held by the church, granted to seekers who follow the proper path. The kneeling monks signify discipleship — wisdom passed from teacher to student through humility.",
+    },
+    {
+        "name": "The Chariot", "number": 7, "arcana": "Major", "element": "Water",
+        "image_emoji": "🛺",
+        "image_url": f"{WIKI_BASE}/9/9b/RWS_Tarot_07_Chariot.jpg",
+        "keywords_upright": ["willpower", "victory", "control", "determination", "focus", "direction", "ambition"],
+        "keywords_reversed": ["loss of control", "lack of direction", "aggression", "scattered effort", "self-doubt", "obstacles"],
+        "upright_meaning": "The Chariot is harnessed will — opposing forces yoked together and driven toward a single goal through sheer determination. Drawing this card promises victory through focus, not luck. The trick is steering: keep your eyes ahead, hold the reins of conflicting impulses, and refuse distraction. You can do this, but only if you choose direction.",
+        "reversed_meaning": "Reversed, the Chariot signals lost direction. The sphinxes pull opposite ways; the driver flails the reins without effect. Ambition becomes aggression, momentum becomes recklessness, or the engine simply stalls. Stop, name what you actually want, and re-yoke your inner forces before pushing again.",
+        "description": "An armored warrior stands in a stone chariot pulled by two sphinxes — one black, one white. The driver wears a crown of stars, a square breastplate, and holds a wand. Above the chariot hangs a starry canopy; the chariot itself bears a winged solar disc and lunar symbols.",
+        "symbolism": "The black and white sphinxes embody opposing forces — light and shadow, conscious and unconscious — that the charioteer must yoke together to move forward. The crown of stars connects the driver to higher purpose; the square breastplate anchors will to earth. The winged solar disc represents the soul's flight protected by divine will. Notably, the driver holds no reins — control comes through inner focus, not external coercion.",
+    },
+    {
+        "name": "Strength", "number": 8, "arcana": "Major", "element": "Fire",
+        "image_emoji": "🦁",
+        "image_url": f"{WIKI_BASE}/f/f5/RWS_Tarot_08_Strength.jpg",
+        "keywords_upright": ["inner strength", "courage", "patience", "compassion", "self-mastery", "gentle power", "endurance"],
+        "keywords_reversed": ["self-doubt", "weakness", "raw force", "impatience", "insecurity", "loss of nerve"],
+        "upright_meaning": "Strength is power tempered by love. A woman calmly closes the jaws of a lion not by force but by presence — she has tamed the wild within. Drawing this card affirms you have more inner resilience than you realize, and that the gentlest, most patient approach will succeed where brute effort fails. Tame, don't suppress.",
+        "reversed_meaning": "Reversed, Strength reveals self-doubt eating away at confidence, or impulsive force masquerading as courage. You may be running from your wild nature instead of befriending it, or pushing through with white-knuckled effort instead of patient mastery. Soften, then continue.",
+        "description": "A serene woman in a flowing white gown gently holds the jaws of a great lion. She wears a crown of flowers and the lemniscate (infinity symbol) hovers above her head. Distant mountains rise behind her under a warm sky.",
+        "symbolism": "The lion represents primal instinct, passion, and shadow — not to be slain but befriended. The woman's hands rest lightly on its jaws: control through presence, not violence. The lemniscate above her echoes the Magician's mark of infinite consciousness — she draws on the same source but channels it through compassion. The crown of flowers signifies victory earned through gentleness; her white robes, purity of intent that disarms aggression.",
+    },
+    {
+        "name": "The Hermit", "number": 9, "arcana": "Major", "element": "Earth",
+        "image_emoji": "🏮",
+        "image_url": f"{WIKI_BASE}/4/4d/RWS_Tarot_09_Hermit.jpg",
+        "keywords_upright": ["introspection", "solitude", "inner guidance", "wisdom", "soul-searching", "withdrawal", "spiritual seeking"],
+        "keywords_reversed": ["isolation", "loneliness", "withdrawal from others", "rejection of guidance", "paranoia", "lost in thought"],
+        "upright_meaning": "The Hermit climbs alone with a lamp — the only light is the one he carries. Drawing this card calls you to step back from noise, retreat into yourself, and listen to the wisdom that surfaces only in silence. Solitude here is not loneliness; it's the deliberate cultivation of inner light that will later guide others.",
+        "reversed_meaning": "Reversed, the Hermit warns that solitude has soured into isolation — withdrawal that no longer nourishes, only walls you off. Alternatively, you may be refusing genuine wisdom available to you, drowning out the inner voice with distraction or surrounding yourself with people to avoid being alone with yourself.",
+        "description": "A cloaked elder stands atop a snow-capped mountain, holding a lit lantern in one hand and a tall staff in the other. His head is bowed, his beard long. The lantern contains a six-pointed star (Seal of Solomon).",
+        "symbolism": "The mountaintop represents spiritual achievement and the high vantage that solitude provides. The lantern's six-pointed star — the Seal of Solomon — symbolizes the union of opposites and the inner light that guides without external sources. The Hermit's staff is the same one the Fool carried, now used for steady support rather than youthful adventure. His grey cloak hides him from worldly attention, signifying detachment from ego and embrace of the soul's quieter work.",
+    },
+    {
+        "name": "Wheel of Fortune", "number": 10, "arcana": "Major", "element": "Fire",
+        "image_emoji": "🎡",
+        "image_url": f"{WIKI_BASE}/3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg",
+        "keywords_upright": ["cycles", "turning point", "fate", "luck", "destiny", "change", "synchronicity"],
+        "keywords_reversed": ["bad luck", "resistance to change", "stuck cycle", "external locus of control", "delays", "unwelcome shift"],
+        "upright_meaning": "The Wheel turns. What rose will fall; what fell will rise. Drawing this card heralds a pivot point — circumstances shift, fortune favors a new direction, a cycle long-running closes. Cooperate with the turning rather than resisting; the wheel does not stop because you grip it.",
+        "reversed_meaning": "Reversed, the Wheel suggests resistance to natural change, or a stuck pattern where you keep meeting the same lesson. Bad luck may seem to dog you, but more often the same wheel is grinding because you haven't learned what this turn was meant to teach. Surrender, learn, move.",
+        "description": "A great wheel floats in the clouds, marked with mystical letters (TARO/ROTA/TORA) and the Hebrew name of God. A sphinx sits atop the wheel holding a sword; a snake descends one side, while Anubis (jackal-headed) rises on the other. In the four corners are an angel, an eagle, a bull, and a lion, all reading books.",
+        "symbolism": "The wheel itself is the cycle of life, fortune, and karma — eternally turning whether you grip it or not. The letters TARO/ROTA can be rearranged to spell either, marking the deck as a wheel of revolving wisdom. The sphinx with the sword keeps balance at the top; Anubis represents the rise out of the underworld, the snake the descent. The four creatures in the corners are the same as on The World — masters of the elements who study the changing cycles rather than fearing them.",
+    },
+    {
+        "name": "Justice", "number": 11, "arcana": "Major", "element": "Air",
+        "image_emoji": "⚖️",
+        "image_url": f"{WIKI_BASE}/e/e0/RWS_Tarot_11_Justice.jpg",
+        "keywords_upright": ["fairness", "truth", "accountability", "cause and effect", "balance", "legal matters", "honesty"],
+        "keywords_reversed": ["injustice", "dishonesty", "lack of accountability", "denial", "bias", "consequences avoided"],
+        "upright_meaning": "Justice holds the scales and the sword. Drawing this card affirms that truth and consequence are working in your favor — but only if you have acted with integrity. Decisions, rulings, and contracts come into focus; expect outcomes that match what you have actually sown. Tell the whole truth, even to yourself.",
+        "reversed_meaning": "Reversed, Justice signals imbalance — accountability dodged, truth shaded, consequences postponed but not erased. You or someone in your situation is avoiding the honest reckoning. Bias, denial, or unfair treatment may be at play. The scales will rebalance; the only question is whether by choice or by force.",
+        "description": "A crowned figure sits on a stone throne between two pillars, holding upright a double-edged sword in one hand and balanced scales in the other. They wear a red robe and a small square crown. A purple veil hangs behind them.",
+        "symbolism": "The sword represents truth that cuts cleanly through deception — double-edged because honesty wounds both ways. The scales weigh intention against action, evidence against testimony, mercy against accountability. The crown's square shape signifies ordered thought; the single visible foot beneath the robe shows Justice is grounded in earthly reality, not abstract ideal. The purple veil behind them hides the deeper mystery: ultimate truth is more than human courts can hold.",
+    },
+    {
+        "name": "The Hanged Man", "number": 12, "arcana": "Major", "element": "Water",
+        "image_emoji": "🙃",
+        "image_url": f"{WIKI_BASE}/2/2b/RWS_Tarot_12_Hanged_Man.jpg",
+        "keywords_upright": ["surrender", "new perspective", "pause", "letting go", "sacrifice", "suspension", "enlightenment"],
+        "keywords_reversed": ["stalling", "indecision", "resistance", "martyrdom", "delay", "missed insight"],
+        "upright_meaning": "The Hanged Man is suspended — willingly, peacefully — and sees the world upside-down. Drawing this card invites surrender, not defeat. Stop pushing. Let things unfold from a new angle. The pause that feels like waste is actually the only position from which the next insight can arrive.",
+        "reversed_meaning": "Reversed, the Hanged Man shows stalling masquerading as surrender — refusing to act, refusing to decide, indefinitely delaying the very pause that should yield insight. Alternatively, martyrdom: sacrificing without purpose, suffering for show. Get down from the tree, or actually hang there and learn.",
+        "description": "A serene young man hangs upside-down from a T-shaped wooden cross (a living tree) by one foot. His other leg is bent into a figure-four. His hands are bound behind his back. A radiant halo surrounds his head; his face is calm, even faintly smiling.",
+        "symbolism": "The willing suspension — hands bound, but the face peaceful — signals that real surrender is chosen, not imposed. The halo marks this as a state of illumination, not punishment. The figure-four leg position is alchemical, signifying the inversion of normal consciousness. The living tree cross suggests that growth comes from being still in the right place, not from constant motion. Sometimes the only way to see clearly is to let the familiar world hang upside-down.",
+    },
+    {
+        "name": "Death", "number": 13, "arcana": "Major", "element": "Water",
+        "image_emoji": "💀",
+        "image_url": f"{WIKI_BASE}/d/d7/RWS_Tarot_13_Death.jpg",
+        "keywords_upright": ["endings", "transformation", "transition", "release", "metamorphosis", "rebirth", "letting go"],
+        "keywords_reversed": ["resistance to change", "stagnation", "fear of endings", "clinging", "incomplete transformation", "delayed renewal"],
+        "upright_meaning": "Death is the great clearing — what no longer serves must end so what is alive can grow. Drawing this card is almost never literal; it marks the necessary close of a chapter, identity, relationship, or way of being. Mourn what's leaving, then welcome what the empty space allows. Rebirth is on the other side.",
+        "reversed_meaning": "Reversed, Death reveals resistance to a transformation that is already underway. You may be clinging to a chapter clearly ending, fearing the void, or refusing to grieve what's gone. The change still happens; the only choice is whether to fight or flow. Let go.",
+        "description": "A skeletal figure in black armor rides a white horse across a barren field, carrying a black banner adorned with a white rose. A fallen king lies on the ground; a child, a maiden, and a bishop approach the rider. In the distance, the sun rises between two towers.",
+        "symbolism": "The white horse signifies the purity of necessary change — Death rides not in anger but as a natural force. The black armor and banner reflect mourning, the rose on the banner is the rose of renewal — endings always contain the seed of what comes next. The fallen king and varied figures show that transformation comes for everyone regardless of station. The rising sun between the towers (echoing The Moon) is the dawn after the dark passage: rebirth is already inevitable.",
+    },
+    {
+        "name": "Temperance", "number": 14, "arcana": "Major", "element": "Fire",
+        "image_emoji": "🍷",
+        "image_url": f"{WIKI_BASE}/f/f8/RWS_Tarot_14_Temperance.jpg",
+        "keywords_upright": ["balance", "moderation", "patience", "blending", "alchemy", "harmony", "calibration"],
+        "keywords_reversed": ["imbalance", "excess", "impatience", "discord", "rushing", "extremes"],
+        "upright_meaning": "Temperance is the slow alchemy of mixing opposites until something new and golden emerges. Drawing this card invites measured patience: blend, don't force; calibrate, don't decide all at once. The art is in the proportion. Take what is fiery, take what is watery, and pour them between vessels until they become medicine.",
+        "reversed_meaning": "Reversed, Temperance signals lost calibration — extremes, excess, impatience, the spilling of effort because you tried to pour too fast. The medicine becomes poison when proportions break. Pause, restore measured pace, and return to the slow art.",
+        "description": "An angel with red wings stands with one foot in a pool of water and the other on dry land, pouring water between two golden cups in a continuous arc that defies physics. Iris flowers grow at the water's edge; a path winds toward distant mountains crowned by a radiant sun.",
+        "symbolism": "The angel's two-footed stance — one in water (the subconscious), one on land (conscious life) — embodies perfect calibration between inner and outer. The impossible flow between cups is alchemical: real transformation happens between containers, in the act of pouring itself. The triangle on the angel's chest in a square frames spirit within matter. The path to the sunlit mountains promises that this patient blending leads to true illumination, but only by walking, never sprinting.",
+    },
+    {
+        "name": "The Devil", "number": 15, "arcana": "Major", "element": "Earth",
+        "image_emoji": "😈",
+        "image_url": f"{WIKI_BASE}/5/55/RWS_Tarot_15_Devil.jpg",
+        "keywords_upright": ["addiction", "attachment", "shadow", "materialism", "bondage", "obsession", "unhealthy patterns"],
+        "keywords_reversed": ["breaking free", "reclaiming power", "releasing addiction", "awareness", "detachment", "escape"],
+        "upright_meaning": "The Devil shows what enslaves you — addiction, obsession, material attachment, the relationship or pattern you keep returning to even when you know better. Drawing this card holds up a mirror: the chains around the figures' necks are loose enough to slip off. You are bound by what you choose to keep believing. Name the chain.",
+        "reversed_meaning": "Reversed, the Devil signals the chain being recognized — and broken. An addiction is named, an unhealthy pattern walked away from, a shadow integrated rather than projected. Power once given away is reclaimed. The work is not complete — old hooks still tug — but the cage door is open.",
+        "description": "A horned, bat-winged demon perches on a black pedestal, raising one clawed hand in a mock blessing and holding a torch downward in the other. Below him, a naked man and woman are chained to the pedestal — but the chains around their necks are loose enough to lift off. Both figures have small horns and tails of their own.",
+        "symbolism": "The Devil is the shadow we've made into a god — addiction, obsession, the comforting story that we are powerless. The loose chains are the central message: bondage is consensual once awareness arrives. The figures' small horns and tails show how we grow to resemble what we worship. The inverted torch is illumination twisted to serve the dark — using light to find more shadow rather than to dispel it. This card never condemns; it reveals.",
+    },
+    {
+        "name": "The Tower", "number": 16, "arcana": "Major", "element": "Fire",
+        "image_emoji": "🗼",
+        "image_url": f"{WIKI_BASE}/5/53/RWS_Tarot_16_Tower.jpg",
+        "keywords_upright": ["sudden upheaval", "revelation", "collapse of falsehood", "shock", "awakening", "breakdown", "liberation"],
+        "keywords_reversed": ["averted disaster", "fear of change", "delayed reckoning", "inner upheaval", "near miss", "warning unheeded"],
+        "upright_meaning": "The Tower falls — a structure built on a false foundation cannot stand once lightning strikes. Drawing this card heralds sudden, often shocking revelation that topples what couldn't survive truth anyway. It feels catastrophic in the moment; in retrospect it is liberation. What is real cannot be destroyed by lightning. Let the false fall.",
+        "reversed_meaning": "Reversed, the Tower's blow is softened — averted disaster, postponed reckoning, or the lightning falling internally rather than externally. You may sense the cracks and act before collapse, or you may be delaying an honest reckoning that only grows more costly. Acknowledge the lightning before it strikes.",
+        "description": "A tall stone tower is struck by lightning and burns at the top, its crown blown off. Two figures plunge from the broken windows, falling head-down toward the ground far below. Drops shaped like the Hebrew letter Yod fall from the sky around them.",
+        "symbolism": "The crown blowing off the tower represents the collapse of false authority and ego-built structures. The lightning is divine truth — sudden, undeniable, indifferent to whether you were ready. The falling figures are not punished; they are freed from a tower that was always going to fall. The Yod-drops in the air are sparks of divine fire scattered by the strike: even in catastrophe, illumination is being seeded. After the Tower comes the Star.",
+    },
+    {
+        "name": "Judgement", "number": 20, "arcana": "Major", "element": "Fire",
+        "image_emoji": "📯",
+        "image_url": f"{WIKI_BASE}/d/dd/RWS_Tarot_20_Judgement.jpg",
+        "keywords_upright": ["awakening", "rebirth", "calling", "reckoning", "absolution", "second chance", "inner awakening"],
+        "keywords_reversed": ["self-doubt", "ignoring the call", "harsh self-judgement", "missed opportunity", "regret", "stagnation"],
+        "upright_meaning": "Judgement is the trumpet that wakes you. Drawing this card marks an awakening — a call to rise above an old version of yourself, answer a purpose long whispered, or finally forgive what you've been carrying. It is reckoning as resurrection, not condemnation. Listen. Stand up. Step into the larger life that has been waiting.",
+        "reversed_meaning": "Reversed, Judgement reveals a call ignored or self-judgement turned cruel. You may be refusing to rise from an old grave, mistaking harshness for accountability, or doubting an inner summons because it would change too much. The trumpet keeps sounding. Stop arguing with it.",
+        "description": "An angel (Gabriel) blows a great trumpet adorned with a red cross banner amid clouds. Below, men, women, and children rise from open coffins floating on grey water, arms raised in welcome. Distant mountains complete the horizon.",
+        "symbolism": "The trumpet is the unmistakable call — once heard it cannot be unheard. The opened coffins represent old selves and finished chapters: you do not have to be who you were. The figures rising with arms raised are not commanded but answering willingly — Judgement is invitation, not coercion. The red cross banner symbolizes resurrection through love rather than fear. The grey water beneath the coffins is the dissolved past: nothing real is lost in this rising.",
     },
 ]
 
@@ -856,15 +1000,49 @@ def make_lesson_for_card(card: dict, order: int) -> dict:
     }
 
 
-def make_quiz_for_card(card: dict, lesson_id: str) -> dict:
-    qs = CUSTOM_QUIZ_BY_NAME.get(card['name'], [])
-    return {
-        "id": str(uuid.uuid4()),
-        "lesson_id": lesson_id,
-        "questions": [
-            {"id": str(uuid.uuid4()), **q} for q in qs
-        ],
-    }
+def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = None) -> dict:
+    qs = CUSTOM_QUIZ_BY_NAME.get(card['name'])
+    if qs:
+        questions = [{"id": str(uuid.uuid4()), **q} for q in qs]
+    else:
+        # Auto-generate 3 questions from card data for cards without hand-crafted quiz
+        others = other_cards or []
+        other_names = [c['name'] for c in others if c['id'] != card['id']][:3]
+        other_kw_up = []
+        other_kw_rev = []
+        for c in others:
+            if c['id'] == card['id']:
+                continue
+            for kw in c.get('keywords_upright', []):
+                if kw not in card['keywords_upright'] and kw not in other_kw_up:
+                    other_kw_up.append(kw); break
+            for kw in c.get('keywords_reversed', []):
+                if kw not in card['keywords_reversed'] and kw not in other_kw_rev:
+                    other_kw_rev.append(kw); break
+
+        correct_kw = card['keywords_upright'][0]
+        opts1 = sorted([correct_kw] + other_kw_up[:3])
+        correct_rev = card['keywords_reversed'][0]
+        opts2 = sorted([correct_rev] + other_kw_rev[:3])
+        opts3 = sorted([card['name']] + other_names)
+        snippet = card['upright_meaning'].split('.')[0]
+
+        questions = [
+            {"id": str(uuid.uuid4()),
+             "question": f"Which keyword best captures {card['name']} (upright)?",
+             "options": opts1, "correct_index": opts1.index(correct_kw),
+             "explanation": f"{card['name']} centers on '{correct_kw}'."},
+            {"id": str(uuid.uuid4()),
+             "question": f"What does {card['name']} suggest when reversed?",
+             "options": opts2, "correct_index": opts2.index(correct_rev),
+             "explanation": f"Reversed, {card['name']} evokes '{correct_rev}'."},
+            {"id": str(uuid.uuid4()),
+             "question": f"Which card matches this teaching: \"{snippet}.\"?",
+             "options": opts3, "correct_index": opts3.index(card['name']),
+             "explanation": f"This describes {card['name']}."},
+        ]
+
+    return {"id": str(uuid.uuid4()), "lesson_id": lesson_id, "questions": questions}
 
 
 @app.on_event("startup")
@@ -877,6 +1055,8 @@ async def seed_data():
     if current >= SEED_VERSION:
         # Even on cached seed, repoint card image URLs to local static (one-time migration)
         await _repoint_card_images()
+        # Bump version anyway so reseed not retriggered
+        await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
         return
     logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
     await db.cards.delete_many({})
@@ -899,7 +1079,7 @@ async def seed_data():
         lesson = make_lesson_for_card(card, idx)
         await db.lessons.insert_one(lesson)
         lesson.pop('_id', None)
-        quiz = make_quiz_for_card(card, lesson['id'])
+        quiz = make_quiz_for_card(card, lesson['id'], seeded_cards)
         await db.quizzes.insert_one(quiz)
 
     await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)

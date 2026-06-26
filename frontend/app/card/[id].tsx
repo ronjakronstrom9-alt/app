@@ -59,14 +59,28 @@ export default function CardDetail() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.cardFrame}>
-            <View style={[styles.cardImageWrap, reversed && { transform: [{ rotate: "180deg" }] }]}>
-              <Image source={{ uri: imageUri(card.image_url) }} style={styles.cardImage} resizeMode="cover" />
+          <View style={styles.dualFrame}>
+            <View style={styles.orientationCol}>
+              <Text style={styles.orientationLabel}>UPRIGHT</Text>
+              <View style={styles.cardFrame}>
+                <View style={styles.cardImageWrap}>
+                  <Image source={{ uri: imageUri(card.image_url) }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+              </View>
             </View>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardRoman}>{toRoman(card.number)}</Text>
-              <Text style={styles.cardName}>{card.name.toUpperCase()}</Text>
+            <View style={styles.orientationCol}>
+              <Text style={styles.orientationLabel}>REVERSED</Text>
+              <View style={styles.cardFrame}>
+                <View style={[styles.cardImageWrap, { transform: [{ rotate: "180deg" }] }]}>
+                  <Image source={{ uri: imageUri(card.image_url) }} style={styles.cardImage} resizeMode="cover" />
+                </View>
+              </View>
             </View>
+          </View>
+
+          <View style={styles.nameBlock}>
+            <Text style={styles.cardRoman}>{toRoman(card.number)}</Text>
+            <Text style={styles.cardName}>{card.name.toUpperCase()}</Text>
           </View>
 
           <View style={styles.toggle}>
@@ -117,11 +131,15 @@ const styles = StyleSheet.create({
   headerTitle: { color: colors.gold, fontSize: 11, letterSpacing: 2, textTransform: "uppercase" },
   scroll: { padding: 20, paddingBottom: 60, gap: 14 },
   cardFrame: {
-    width: "100%", maxWidth: 240, alignSelf: "center",
+    width: "100%",
     backgroundColor: colors.surface,
-    borderRadius: 18, borderWidth: 2, borderColor: colors.gold,
+    borderRadius: 14, borderWidth: 2, borderColor: colors.gold,
     overflow: "hidden",
   },
+  dualFrame: { flexDirection: "row", gap: 12 },
+  orientationCol: { flex: 1, alignItems: "center", gap: 6 },
+  orientationLabel: { color: colors.gold, fontFamily: fonts.display, fontWeight: "700", fontSize: 11, letterSpacing: 2.5 },
+  nameBlock: { alignItems: "center", gap: 4, marginTop: 10 },
   cardImageWrap: { width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
   cardImage: { width: "100%", height: "100%" },
   cardFooter: {
@@ -129,8 +147,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: colors.borderSoft,
     alignItems: "center", gap: 2,
   },
-  cardRoman: { color: colors.gold, fontFamily: fonts.display, fontSize: 14, letterSpacing: 4 },
-  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontWeight: "700", fontSize: 13, letterSpacing: 3 },
+  cardRoman: { color: colors.gold, fontFamily: fonts.display, fontWeight: "700", fontSize: 18, letterSpacing: 4 },
+  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontWeight: "700", fontSize: 18, letterSpacing: 4 },
   toggle: {
     flexDirection: "row", backgroundColor: colors.surface, borderRadius: 999,
     padding: 4, borderWidth: 1, borderColor: colors.borderSoft, marginTop: 6,
