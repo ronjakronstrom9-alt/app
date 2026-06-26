@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     alignItems: "center", gap: 2,
   },
   cardRoman: { color: colors.gold, fontFamily: fonts.display, fontSize: 14, letterSpacing: 4 },
-  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 13, letterSpacing: 3 },
+  cardName: { color: colors.textPrimary, fontFamily: fonts.display, fontWeight: "700", fontSize: 13, letterSpacing: 3 },
   toggle: {
     flexDirection: "row", backgroundColor: colors.surface, borderRadius: 999,
     padding: 4, borderWidth: 1, borderColor: colors.borderSoft, marginTop: 6,
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   kwRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   kw: { borderWidth: 1, borderColor: colors.gold, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   kwText: { color: colors.gold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
-  sectionHeading: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 24, marginTop: 12 },
+  sectionHeading: { color: colors.textPrimary, fontFamily: fonts.serif, fontSize: 26, lineHeight: 32, marginTop: 12, letterSpacing: 0.3 },
   divider: { height: 1, backgroundColor: colors.border, width: 50 },
-  body: { color: colors.textPrimary, fontSize: 15, lineHeight: 24 },
+  body: { color: colors.textPrimary, fontFamily: fonts.body, fontSize: 15, lineHeight: 24, letterSpacing: 0.2 },
 });

@@ -228,6 +228,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.borderSoft,
   },
   nodeLabel: { flex: 1, justifyContent: "center", maxWidth: 140 },
-  nodeLabelTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 16 },
+  nodeLabelTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontWeight: "700", fontSize: 16, letterSpacing: 1 },
   nodeLabelSub: { color: colors.textSecondary, fontSize: 12, marginTop: 2, letterSpacing: 1, textTransform: "uppercase" },
 });

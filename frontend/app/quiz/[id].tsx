@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   heartsText: { color: colors.crimson, fontWeight: "700", fontSize: 14 },
   scroll: { padding: 24, gap: 18 },
   qNumber: { color: colors.gold, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
-  question: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 24, lineHeight: 32 },
+  question: { color: colors.textPrimary, fontFamily: fonts.serif, fontSize: 24, lineHeight: 32, letterSpacing: 0.3 },
   options: { gap: 12, marginTop: 18 },
   option: {
     backgroundColor: colors.surface, padding: 16, borderRadius: 16,
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: colors.gold, paddingVertical: 16, borderRadius: 999, alignItems: "center" },
   ctaText: { color: colors.bg, fontWeight: "700", fontSize: 16, letterSpacing: 0.5 },
   resultBox: { flex: 1, padding: 24, alignItems: "center", justifyContent: "center", gap: 16 },
-  resultTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 32, textAlign: "center", marginTop: 10 },
+  resultTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 30, textAlign: "center", marginTop: 10, letterSpacing: 3 },
   resultSub: { color: colors.textSecondary, fontSize: 16 },
   rewardGrid: { flexDirection: "row", gap: 12, marginVertical: 28, width: "100%" },
   reward: {

@@ -25,6 +25,11 @@ export default function Profile() {
     <View style={styles.root}>
       <StarBg count={40} />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => router.replace("/(tabs)")} style={styles.backBtn} testID="profile-back-btn">
+            <Ionicons name="chevron-back" size={26} color={colors.gold} />
+          </TouchableOpacity>
+        </View>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
@@ -84,6 +89,8 @@ function Row({ icon, label, value }: any) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  topBar: { paddingHorizontal: 12, paddingTop: 6 },
+  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   scroll: { padding: 20, paddingBottom: 100, gap: 22 },
   avatarWrap: { alignItems: "center", gap: 8, marginTop: 8 },
   avatar: {

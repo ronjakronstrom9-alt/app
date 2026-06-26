@@ -93,6 +93,11 @@ export default function LessonScreen() {
               </View>
               <Text style={styles.sectionHeading}>{section!.heading}</Text>
               <View style={styles.divider} />
+              {section!.heading.toLowerCase().includes("imagery") && (
+                <View style={styles.sectionImageFrame} testID="section-imagery-image">
+                  <Image source={{ uri: imageUri(card.image_url) }} style={styles.sectionImage} resizeMode="cover" />
+                </View>
+              )}
               <Text style={styles.sectionBody}>{section!.body}</Text>
             </View>
           )}
@@ -144,24 +149,24 @@ const styles = StyleSheet.create({
     alignItems: "center", gap: 2,
   },
   cardFooterRoman: { color: colors.gold, fontFamily: fonts.display, fontSize: 16, letterSpacing: 4 },
-  cardFooterName: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 3 },
+  cardFooterName: { color: colors.textPrimary, fontFamily: fonts.display, fontWeight: "700", fontSize: 14, letterSpacing: 3 },
   lessonTitle: {
     color: colors.gold,
     fontFamily: fonts.display,
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 34,
+    lineHeight: 40,
     textAlign: "center",
-    letterSpacing: 1,
+    letterSpacing: 3,
     marginTop: 6,
-    fontWeight: "600",
   },
   lessonSubtitle: {
     color: colors.textSecondary,
-    fontSize: 14,
-    textAlign: "center",
+    fontFamily: fonts.serifItalic,
     fontStyle: "italic",
-    letterSpacing: 0.5,
-    marginTop: -8,
+    fontSize: 17,
+    textAlign: "center",
+    letterSpacing: 0.4,
+    marginTop: -6,
   },
   kwGroup: { flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 8 },
   kwChip: {
@@ -170,10 +175,19 @@ const styles = StyleSheet.create({
   kwText: { color: colors.gold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
   sectionBlock: { gap: 14 },
   sectionMarker: { flexDirection: "row", alignItems: "center", gap: 6 },
+  sectionImageFrame: {
+    alignSelf: "center",
+    width: "80%", maxWidth: 220,
+    borderRadius: 14,
+    borderWidth: 2, borderColor: colors.gold,
+    overflow: "hidden",
+    marginVertical: 6,
+  },
+  sectionImage: { width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
   sectionKicker: { color: colors.gold, fontSize: 11, letterSpacing: 2, textTransform: "uppercase" },
-  sectionHeading: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 30, lineHeight: 36, letterSpacing: 0.5 },
+  sectionHeading: { color: colors.textPrimary, fontFamily: fonts.serif, fontSize: 28, lineHeight: 34, letterSpacing: 0.3 },
   divider: { height: 1, backgroundColor: colors.border, width: 60, marginVertical: 6 },
-  sectionBody: { color: colors.textPrimary, fontSize: 16, lineHeight: 26, letterSpacing: 0.2 },
+  sectionBody: { color: colors.textPrimary, fontFamily: fonts.body, fontSize: 16, lineHeight: 26, letterSpacing: 0.2 },
   footer: { padding: 20 },
   cta: { backgroundColor: colors.gold, paddingVertical: 16, borderRadius: 999, alignItems: "center" },
   ctaText: { color: colors.bg, fontWeight: "700", fontSize: 16, letterSpacing: 0.5 },

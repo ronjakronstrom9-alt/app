@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
 import { api, Progress } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 
 export default function ProgressScreen() {
+  const router = useRouter();
   const [data, setData] = useState<Progress | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,8 +42,15 @@ export default function ProgressScreen() {
       <StarBg count={40} />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.kicker}>Your Journey</Text>
-          <Text style={styles.title} testID="progress-title">Progress</Text>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.replace("/(tabs)")} style={styles.backBtn} testID="progress-back-btn">
+              <Ionicons name="chevron-back" size={26} color={colors.gold} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kicker}>Your Journey</Text>
+              <Text style={styles.title} testID="progress-title">Progress</Text>
+            </View>
+          </View>
 
           {/* Level card */}
           <View style={styles.levelCard} testID="progress-level-card">
@@ -98,8 +106,10 @@ function StatTile({ icon, label, value, color, testID }: any) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: 20, paddingBottom: 80 },
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 20 },
+  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", marginTop: 4 },
   kicker: { color: colors.gold, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
-  title: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 30, marginTop: 4, marginBottom: 20 },
+  title: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 30, marginTop: 4 },
   levelCard: {
     backgroundColor: colors.surface,
     borderRadius: 22, padding: 22,
