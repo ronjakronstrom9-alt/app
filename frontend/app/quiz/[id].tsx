@@ -83,7 +83,7 @@ export default function QuizScreen() {
 
   return (
     <View style={styles.root}>
-      <StarBg count={40} />
+      <StarBg count={20} />
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View style={styles.header}>
           <TouchableOpacity
@@ -146,7 +146,7 @@ function QuizResultView({ result, onDone }: { result: QuizResult; onDone: () => 
   const passed = result.correct >= Math.max(1, Math.round(result.total * 0.6));
   return (
     <View style={styles.root}>
-      <StarBg count={80} />
+      <StarBg count={40} />
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View style={styles.resultBox} testID="quiz-result">
           <Ionicons name={passed ? "star" : "moon"} size={80} color={colors.gold} />

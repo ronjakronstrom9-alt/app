@@ -48,7 +48,7 @@ export default function CardDetail() {
 
   return (
     <View style={styles.root}>
-      <StarBg count={40} />
+      <StarBg count={20} />
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn} testID="card-back-btn">

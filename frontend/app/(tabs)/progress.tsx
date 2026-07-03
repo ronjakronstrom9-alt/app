@@ -39,7 +39,7 @@ export default function ProgressScreen() {
 
   return (
     <View style={styles.root}>
-      <StarBg count={40} />
+      <StarBg count={20} />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.header}>

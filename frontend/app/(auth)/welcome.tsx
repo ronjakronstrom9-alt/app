@@ -13,7 +13,7 @@ export default function Welcome() {
   return (
     <View style={styles.root} testID="welcome-screen">
       <ImageBackground source={{ uri: BG }} style={StyleSheet.absoluteFill} imageStyle={{ opacity: 0.25 }} />
-      <StarBg count={80} />
+      <StarBg count={40} />
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.top}>
           <View style={styles.moonWrap}>

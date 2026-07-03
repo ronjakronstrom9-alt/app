@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone, date
 import bcrypt
 import jwt as pyjwt
 import urllib.request
+from io import BytesIO
+from PIL import Image as PILImage
 
 
 ROOT_DIR = Path(__file__).parent
@@ -365,10 +367,13 @@ WIKI_SOURCES = {
 
 def download_card_images():
     """Download Wikimedia images to local static folder so the mobile client
-    can fetch them from our own backend (no external CDN dependency)."""
+    can fetch them from our own backend (no external CDN dependency).
+    Downsized to 600px wide JPEG q82 for fast mobile transfer (~50KB each
+    instead of ~900KB originals)."""
     for name, (path, fname) in WIKI_SOURCES.items():
         dest = STATIC_CARDS_DIR / fname
-        if dest.exists() and dest.stat().st_size > 10000:
+        # Consider already-optimized if file is small enough
+        if dest.exists() and 5000 < dest.stat().st_size < 200000:
             continue
         url = f"{WIKI_BASE}/{path}"
         try:
@@ -377,8 +382,17 @@ def download_card_images():
             })
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = resp.read()
-            dest.write_bytes(data)
-            logger.info(f"Downloaded {fname} ({len(data)} bytes)")
+            # Downsize with Pillow
+            img = PILImage.open(BytesIO(data)).convert("RGB")
+            target_w = 600
+            if img.width > target_w:
+                ratio = target_w / img.width
+                new_size = (target_w, int(img.height * ratio))
+                img = img.resize(new_size, PILImage.LANCZOS)
+            out = BytesIO()
+            img.save(out, format="JPEG", quality=82, optimize=True, progressive=True)
+            dest.write_bytes(out.getvalue())
+            logger.info(f"Optimized {fname} ({len(data)}B -> {dest.stat().st_size}B)")
         except Exception as e:
             logger.warning(f"Failed to download {fname}: {e}")
 
@@ -1103,7 +1117,16 @@ async def root():
 
 
 app.include_router(api_router)
-app.mount("/api/static/cards", StaticFiles(directory=str(STATIC_CARDS_DIR)), name="static_cards")
+
+class CachedStaticFiles(StaticFiles):
+    """Serve cards with long-lived immutable cache so the mobile Image cache
+    doesn't refetch them across sessions."""
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+        return resp
+
+app.mount("/api/static/cards", CachedStaticFiles(directory=str(STATIC_CARDS_DIR)), name="static_cards")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True, allow_origins=["*"],

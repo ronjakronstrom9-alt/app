@@ -11,6 +11,15 @@ export function imageUri(url: string | undefined | null): string {
   return `${BASE}${url}`;
 }
 
+// ===== Module-level cache =====
+// Cards and lessons are static — cache them so tab switches don't refetch.
+let _cardsCache: Card[] | null = null;
+let _lessonsCache: Lesson[] | null = null;
+export function invalidateStaticCache() {
+  _cardsCache = null;
+  _lessonsCache = null;
+}
+
 async function getToken(): Promise<string | null> {
   return (await storage.secureGet<string>(TOKEN_KEY, "")) || null;
 }
@@ -60,10 +69,18 @@ export const api = {
     request<{ token: string; user: User }>("POST", "/auth/login", { email, password }, false),
   me: () => request<User>("GET", "/auth/me"),
 
-  listCards: () => request<Card[]>("GET", "/cards", undefined, false),
+  listCards: async () => {
+    if (_cardsCache) return _cardsCache;
+    _cardsCache = await request<Card[]>("GET", "/cards", undefined, false);
+    return _cardsCache;
+  },
   getCard: (id: string) => request<Card>("GET", `/cards/${id}`, undefined, false),
 
-  listLessons: () => request<Lesson[]>("GET", "/lessons", undefined, false),
+  listLessons: async () => {
+    if (_lessonsCache) return _lessonsCache;
+    _lessonsCache = await request<Lesson[]>("GET", "/lessons", undefined, false);
+    return _lessonsCache;
+  },
   getLesson: (id: string) => request<Lesson>("GET", `/lessons/${id}`, undefined, false),
 
   getQuiz: (lessonId: string) =>

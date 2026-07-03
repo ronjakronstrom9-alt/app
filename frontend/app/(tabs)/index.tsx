@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl, Image,
@@ -8,7 +8,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
-import { api, Card, Lesson, imageUri } from "@/src/api/client";
+import { api, Card, Lesson, imageUri, invalidateStaticCache } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 
 export default function Home() {
@@ -33,29 +33,32 @@ export default function Home() {
     }
   }, []);
 
+  // Refresh user data (XP, hearts, streak) on tab focus so it stays current
+  // after finishing a lesson. Cards/lessons are cached in api client so
+  // load() returns instantly on subsequent calls (no re-fetch, no re-render).
   useFocusEffect(
     useCallback(() => {
       refresh();
-      load();
-    }, [refresh, load]),
+    }, [refresh]),
   );
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    invalidateStaticCache();
     await Promise.all([refresh(), load()]);
     setRefreshing(false);
-  };
+  }, [refresh, load]);
 
   if (!user) return null;
-  const completed = new Set(user.completed_lessons);
+  const completed = useMemo(() => new Set(user.completed_lessons), [user.completed_lessons]);
 
   return (
     <View style={styles.root}>
-      <StarBg count={50} />
+      <StarBg count={30} />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         {/* Sticky header */}
         <View style={styles.header} testID="home-header">
@@ -84,6 +87,7 @@ export default function Home() {
         ) : (
           <ScrollView
             contentContainerStyle={styles.scroll}
+            removeClippedSubviews
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
             }

@@ -35,7 +35,7 @@ export default function Library() {
 
   return (
     <View style={styles.root}>
-      <StarBg count={40} />
+      <StarBg count={20} />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.replace("/(tabs)")} style={styles.backBtn} testID="library-back-btn">
