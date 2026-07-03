@@ -116,6 +116,7 @@ export type Card = {
   name: string;
   number: number;
   arcana: string;
+  suit?: string | null;
   keywords_upright: string[];
   keywords_reversed: string[];
   upright_meaning: string;

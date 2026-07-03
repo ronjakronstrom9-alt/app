@@ -14,8 +14,10 @@ from datetime import datetime, timedelta, timezone, date
 import bcrypt
 import jwt as pyjwt
 import urllib.request
+import time as _time
 from io import BytesIO
 from PIL import Image as PILImage
+from minor_arcana import build_seed_entries
 
 
 ROOT_DIR = Path(__file__).parent
@@ -28,7 +30,7 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
-SEED_VERSION = 5  # bump to re-seed
+SEED_VERSION = 8  # bump to re-seed
 
 STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
 STATIC_CARDS_DIR.mkdir(exist_ok=True)
@@ -70,6 +72,7 @@ class TarotCard(BaseModel):
     name: str
     number: int
     arcana: str
+    suit: Optional[str] = None
     keywords_upright: List[str]
     keywords_reversed: List[str]
     upright_meaning: str
@@ -202,7 +205,15 @@ async def me(user: dict = Depends(get_current_user)):
 # ===== CARDS =====
 @api_router.get("/cards", response_model=List[TarotCard])
 async def list_cards():
-    cards = await db.cards.find({}, {"_id": 0}).sort("number", 1).to_list(100)
+    # Sort Major arcana first (by number 0-21), then Minor arcana grouped by
+    # suit (Wands, Cups, Swords, Pentacles) and within each by number (1-14).
+    cards = await db.cards.find({}, {"_id": 0}).to_list(200)
+    suit_order = {None: 0, "Wands": 1, "Cups": 2, "Swords": 3, "Pentacles": 4}
+    def sort_key(c):
+        return (0 if c.get('arcana') == "Major" else 1,
+                suit_order.get(c.get('suit'), 99),
+                c.get('number', 0))
+    cards.sort(key=sort_key)
     return [TarotCard(**c) for c in cards]
 
 @api_router.get("/cards/{card_id}", response_model=TarotCard)
@@ -366,35 +377,40 @@ WIKI_SOURCES = {
 
 
 def download_card_images():
-    """Download Wikimedia images to local static folder so the mobile client
-    can fetch them from our own backend (no external CDN dependency).
-    Downsized to 600px wide JPEG q82 for fast mobile transfer (~50KB each
-    instead of ~900KB originals)."""
-    for name, (path, fname) in WIKI_SOURCES.items():
+    """Download Wikimedia images to local static folder. Downsized to 600px
+    wide JPEG q82 for fast mobile transfer. Small pause between requests to
+    stay under Wikimedia's per-client rate limit."""
+    downloaded_this_run = 0
+    for name, (path_or_url, fname) in WIKI_SOURCES.items():
         dest = STATIC_CARDS_DIR / fname
-        # Consider already-optimized if file is small enough
-        if dest.exists() and 5000 < dest.stat().st_size < 200000:
+        if dest.exists() and 5000 < dest.stat().st_size < 300000:
             continue
-        url = f"{WIKI_BASE}/{path}"
-        try:
-            req = urllib.request.Request(url, headers={
-                "User-Agent": "MysticXP-Tarot-App/1.0 (educational; contact@mystic.app)"
-            })
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read()
-            # Downsize with Pillow
-            img = PILImage.open(BytesIO(data)).convert("RGB")
-            target_w = 600
-            if img.width > target_w:
-                ratio = target_w / img.width
-                new_size = (target_w, int(img.height * ratio))
-                img = img.resize(new_size, PILImage.LANCZOS)
-            out = BytesIO()
-            img.save(out, format="JPEG", quality=82, optimize=True, progressive=True)
-            dest.write_bytes(out.getvalue())
-            logger.info(f"Optimized {fname} ({len(data)}B -> {dest.stat().st_size}B)")
-        except Exception as e:
-            logger.warning(f"Failed to download {fname}: {e}")
+        url = path_or_url if path_or_url.startswith("http") else f"{WIKI_BASE}/{path_or_url}"
+        # Space out live downloads to avoid HTTP 429 from Wikimedia
+        if downloaded_this_run > 0:
+            _time.sleep(1.5)
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": "MysticXP-Tarot-App/1.0 (educational; contact@mystic.app)"
+                })
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = resp.read()
+                img = PILImage.open(BytesIO(data)).convert("RGB")
+                if img.width > 600:
+                    r = 600 / img.width
+                    img = img.resize((600, int(img.height * r)), PILImage.LANCZOS)
+                out = BytesIO()
+                img.save(out, format="JPEG", quality=82, optimize=True, progressive=True)
+                dest.write_bytes(out.getvalue())
+                downloaded_this_run += 1
+                logger.info(f"Optimized {fname} ({len(data)}B -> {dest.stat().st_size}B)")
+                break
+            except Exception as e:
+                if attempt < 2:
+                    _time.sleep(4 * (attempt + 1))
+                    continue
+                logger.warning(f"Failed to download {fname}: {e}")
 
 SEED_CARDS = [
     {
@@ -1061,15 +1077,17 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
 
 @app.on_event("startup")
 async def seed_data():
+    # Extend WIKI_SOURCES with 56 Minor Arcana entries (name -> (url, filename))
+    for _m in build_seed_entries():
+        WIKI_SOURCES[_m['name']] = (_m['image_url'], _m['_slug'])
+
     # Always ensure images are downloaded locally (independent of seed version)
     download_card_images()
 
     meta = await db.meta.find_one({"_id": "seed"}) or {}
     current = meta.get("version", 0)
     if current >= SEED_VERSION:
-        # Even on cached seed, repoint card image URLs to local static (one-time migration)
         await _repoint_card_images()
-        # Bump version anyway so reseed not retriggered
         await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
         return
     logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
@@ -1078,13 +1096,20 @@ async def seed_data():
     await db.quizzes.delete_many({})
     await db.users.update_many({}, {"$set": {"completed_lessons": []}})
 
+    # Combine Major + Minor arcana
+    all_cards_raw = list(SEED_CARDS)
+    for _m in build_seed_entries():
+        entry = {k: v for k, v in _m.items() if not k.startswith("_")}
+        entry["image_url"] = f"/api/static/cards/{_m['_slug']}"
+        all_cards_raw.append(entry)
+
     seeded_cards = []
-    for c in SEED_CARDS:
+    for c in all_cards_raw:
         doc = {**c, "id": str(uuid.uuid4())}
-        # Rewrite image_url to point to our backend's static folder
         slug_pair = WIKI_SOURCES.get(doc['name'])
         if slug_pair:
             doc['image_url'] = f"/api/static/cards/{slug_pair[1]}"
+        doc.setdefault('suit', None)
         await db.cards.insert_one(doc)
         doc.pop('_id', None)
         seeded_cards.append(doc)
@@ -1097,7 +1122,7 @@ async def seed_data():
         await db.quizzes.insert_one(quiz)
 
     await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
-    logger.info("Re-seed complete.")
+    logger.info(f"Re-seed complete ({len(seeded_cards)} cards).")
 
 
 async def _repoint_card_images():
