@@ -63,10 +63,33 @@ export default function Library() {
                 onPress={() => router.push(`/card/${item.id}`)}
                 testID={`card-${index}`}
               >
-                <Image source={{ uri: imageUri(item.image_url) }} style={styles.cardImage} resizeMode="cover" />
+                <View style={styles.imageWrap}>
+                  <Image source={{ uri: imageUri(item.image_url) }} style={styles.cardImage} resizeMode="cover" />
+                  {/* Keyword overlay: gradient-like dark band + name + top keyword */}
+                  <View style={styles.overlay} pointerEvents="none">
+                    <Text
+                      style={styles.overlayName}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.6}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text style={styles.overlayKw} numberOfLines={1}>
+                      {(item.keywords_upright?.slice(0, 2) || []).join(" · ")}
+                    </Text>
+                  </View>
+                </View>
                 <View style={styles.cardFooter}>
                   <Text style={styles.cardRoman}>{toRoman(item.number)}</Text>
-                  <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+                  <Text
+                    style={styles.cardName}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.55}
+                  >
+                    {item.name}
+                  </Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -92,7 +115,35 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
     overflow: "hidden",
   },
-  cardImage: { width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
+  imageWrap: { position: "relative", width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
+  cardImage: { width: "100%", height: "100%" },
+  overlay: {
+    position: "absolute", left: 0, right: 0, bottom: 0,
+    paddingHorizontal: 8, paddingVertical: 8,
+    backgroundColor: "rgba(11,8,26,0.78)",
+    borderTopWidth: 1, borderTopColor: "rgba(212,175,55,0.35)",
+    alignItems: "center", gap: 2,
+  },
+  overlayName: {
+    color: colors.goldGlow,
+    fontFamily: fonts.display,
+    fontWeight: "700",
+    fontSize: 12,
+    letterSpacing: 1.5,
+    textAlign: "center",
+    textTransform: "uppercase",
+    maxWidth: "100%",
+  },
+  overlayKw: {
+    color: colors.textPrimary,
+    fontFamily: fonts.body,
+    fontSize: 9,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    opacity: 0.9,
+    textAlign: "center",
+    maxWidth: "100%",
+  },
   cardFooter: {
     paddingVertical: 10, paddingHorizontal: 10,
     backgroundColor: colors.bg2,

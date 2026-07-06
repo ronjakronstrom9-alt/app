@@ -93,12 +93,31 @@ export default function LessonScreen() {
               </View>
               <Text style={styles.sectionHeading}>{section!.heading}</Text>
               <View style={styles.divider} />
-              {section!.heading.toLowerCase().includes("imagery") && (
-                <View style={styles.sectionImageFrame} testID="section-imagery-image">
-                  <Image source={{ uri: imageUri(card.image_url) }} style={styles.sectionImage} resizeMode="cover" />
-                </View>
+              {section!.heading.toLowerCase().includes("imagery") ? (
+                (() => {
+                  // Split body at the paragraph break: short "Imagery" (description)
+                  // shows BEFORE the image; longer "Symbolism" shows AFTER.
+                  const parts = section!.body.split(/\n\n/);
+                  const before = parts[0] || "";
+                  const after = parts.slice(1).join("\n\n").trim();
+                  return (
+                    <>
+                      {!!before && <Text style={styles.sectionBody}>{before}</Text>}
+                      <View style={styles.sectionImageFrame} testID="section-imagery-image">
+                        <Image source={{ uri: imageUri(card.image_url) }} style={styles.sectionImage} resizeMode="cover" />
+                      </View>
+                      {!!after && (
+                        <>
+                          <Text style={styles.sectionSubheading}>Symbolism</Text>
+                          <Text style={styles.sectionBody}>{after}</Text>
+                        </>
+                      )}
+                    </>
+                  );
+                })()
+              ) : (
+                <Text style={styles.sectionBody}>{section!.body}</Text>
               )}
-              <Text style={styles.sectionBody}>{section!.body}</Text>
             </View>
           )}
         </ScrollView>
@@ -184,6 +203,13 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   sectionImage: { width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
+  sectionSubheading: {
+    color: colors.gold,
+    fontFamily: fonts.serif,
+    fontSize: 18,
+    letterSpacing: 0.3,
+    marginTop: 8,
+  },
   sectionKicker: { color: colors.gold, fontSize: 11, letterSpacing: 2, textTransform: "uppercase" },
   sectionHeading: { color: colors.textPrimary, fontFamily: fonts.serif, fontSize: 28, lineHeight: 34, letterSpacing: 0.3 },
   divider: { height: 1, backgroundColor: colors.border, width: 60, marginVertical: 6 },

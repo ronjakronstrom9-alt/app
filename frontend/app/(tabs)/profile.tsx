@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { colors, fonts } from "@/src/theme";
+import { colors, fonts, useTheme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import { StarBg } from "@/src/components/StarBg";
 
@@ -12,6 +12,7 @@ const TITLES = ["Seeker", "Acolyte", "Initiate", "Adept", "Mystic", "Oracle", "S
 export default function Profile() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const { mode, toggle } = useTheme();
   if (!user) return null;
 
   const title = TITLES[Math.min(user.level - 1, TITLES.length - 1)];
@@ -47,6 +48,23 @@ export default function Profile() {
             <SmallStat label="XP" value={user.xp} icon="star" color={colors.goldGlow} />
             <SmallStat label="Streak" value={user.streak} icon="flame" color={colors.gold} />
             <SmallStat label="Lessons" value={user.completed_lessons.length} icon="checkmark-done" color={colors.green} />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Appearance</Text>
+            <TouchableOpacity
+              onPress={toggle}
+              activeOpacity={0.85}
+              style={styles.themeRow}
+              testID="theme-toggle-btn"
+            >
+              <Ionicons name={mode === "dark" ? "moon" : "sunny"} size={18} color={colors.gold} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowLabel}>Theme</Text>
+                <Text style={styles.rowValue}>{mode === "dark" ? "Dark (Mystical)" : "Light (Daylight)"}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.section}>
@@ -115,6 +133,7 @@ const styles = StyleSheet.create({
   smallStatValue: { fontFamily: fonts.display, fontSize: 22 },
   smallStatLabel: { color: colors.textSecondary, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
   section: { backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 14, borderWidth: 1, borderColor: colors.borderSoft },
+  themeRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   sectionTitle: { color: colors.gold, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
   row: { flexDirection: "row", alignItems: "center", gap: 14 },
   rowLabel: { color: colors.textSecondary, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
