@@ -105,6 +105,24 @@ export const api = {
     request<{ ok: boolean }>("POST", "/notes", { card_id: cardId, text }),
   achievements: () =>
     request<{ total: number; unlocked: number; items: Achievement[] }>("GET", "/achievements"),
+  dailyHistory: (year: number, month: number) =>
+    request<{ year: number; month: number; count: number; entries: DailyEntry[] }>(
+      "GET",
+      `/daily-history?year=${year}&month=${month}`,
+    ),
+  saveReflection: (dateIso: string, text: string) =>
+    request<{ ok: boolean }>("POST", "/daily-history/reflect", { date: dateIso, text }),
+};
+
+export type DailyEntry = {
+  date: string;
+  card_id: string;
+  card_name: string;
+  card_number: number;
+  image_url: string;
+  reflection?: string;
+  reflection_updated_at?: string;
+  created_at?: string;
 };
 
 export type User = {

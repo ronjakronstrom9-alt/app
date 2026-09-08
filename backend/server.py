@@ -412,7 +412,8 @@ import hashlib as _hashlib
 @api_router.get("/daily-card")
 async def daily_card(user: dict = Depends(get_current_user)):
     """Deterministic 'card of the day' — same card all day per user, different
-    next day. Uses SHA1(user_id + iso_date) modulo card count to pick."""
+    next day. Uses SHA1(user_id + iso_date) modulo card count to pick.
+    Also upserts an entry into daily_history so the user can browse past draws."""
     today = date.today().isoformat()
     total = await db.cards.count_documents({})
     if total == 0:
@@ -421,7 +422,59 @@ async def daily_card(user: dict = Depends(get_current_user)):
     idx = int(seed, 16) % total
     all_cards = await db.cards.find({}, {"_id": 0}).to_list(200)
     card = all_cards[idx]
+    # Record the draw (idempotent per user+date)
+    await db.daily_history.update_one(
+        {"user_id": user['id'], "date": today},
+        {"$setOnInsert": {
+            "user_id": user['id'], "date": today, "card_id": card['id'],
+            "card_name": card['name'], "image_url": card['image_url'],
+            "card_number": card.get('number', 0),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
     return {"date": today, "card": card, "prompt": "What does this card invite you to focus on today?"}
+
+
+class DailyReflectionReq(BaseModel):
+    date: str  # ISO YYYY-MM-DD
+    text: str
+
+
+@api_router.post("/daily-history/reflect")
+async def save_reflection(req: DailyReflectionReq, user: dict = Depends(get_current_user)):
+    """Attach or replace the user's written reflection for a given daily draw."""
+    entry = await db.daily_history.find_one({"user_id": user['id'], "date": req.date})
+    if not entry:
+        raise HTTPException(status_code=404, detail="No draw recorded for that date")
+    await db.daily_history.update_one(
+        {"user_id": user['id'], "date": req.date},
+        {"$set": {"reflection": req.text,
+                  "reflection_updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True}
+
+
+@api_router.get("/daily-history")
+async def daily_history(
+    year: int, month: int,
+    user: dict = Depends(get_current_user),
+):
+    """Return all daily draws for user in given calendar month (1-indexed)."""
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=400, detail="Invalid month")
+    # Build ISO date prefix like 2026-06 for a simple prefix match.
+    prefix = f"{year:04d}-{month:02d}"
+    entries = await db.daily_history.find(
+        {"user_id": user['id'], "date": {"$regex": f"^{prefix}"}},
+        {"_id": 0, "user_id": 0},
+    ).sort("date", 1).to_list(50)
+    return {
+        "year": year,
+        "month": month,
+        "entries": entries,
+        "count": len(entries),
+    }
 
 
 @api_router.get("/users/progress")
