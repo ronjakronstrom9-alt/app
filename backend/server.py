@@ -1476,6 +1476,12 @@ class CachedStaticFiles(StaticFiles):
         return resp
 
 app.mount("/api/static/cards", CachedStaticFiles(directory=str(STATIC_CARDS_DIR)), name="static_cards")
+
+# Downloadable project archives (source-code export). Files placed in this
+# folder are publicly accessible via /api/downloads/<filename>.
+DOWNLOADS_DIR = ROOT_DIR / "downloads"
+DOWNLOADS_DIR.mkdir(exist_ok=True)
+app.mount("/api/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True, allow_origins=["*"],
