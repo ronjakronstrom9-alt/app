@@ -96,6 +96,15 @@ export const api = {
     }),
   refillHearts: () => request<{ hearts: number }>("POST", "/users/refill-hearts"),
   progress: () => request<Progress>("GET", "/users/progress"),
+  toggleFavorite: (cardId: string) =>
+    request<{ favorited: boolean; favorites: string[] }>("POST", "/favorites/toggle", { card_id: cardId }),
+  listFavorites: () => request<Card[]>("GET", "/favorites"),
+  dailyCard: () => request<{ date: string; card: Card; prompt: string }>("GET", "/daily-card"),
+  getNote: (cardId: string) => request<{ card_id: string; text: string }>("GET", `/notes/${cardId}`),
+  saveNote: (cardId: string, text: string) =>
+    request<{ ok: boolean }>("POST", "/notes", { card_id: cardId, text }),
+  achievements: () =>
+    request<{ total: number; unlocked: number; items: Achievement[] }>("GET", "/achievements"),
 };
 
 export type User = {
@@ -108,6 +117,7 @@ export type User = {
   streak: number;
   last_active_date: string | null;
   completed_lessons: string[];
+  favorites: string[];
   created_at: string;
 };
 
@@ -143,17 +153,34 @@ export type QuizQuestion = {
   id: string;
   question: string;
   options: string[];
+  question_type?: "mcq" | "match_image" | "match_meaning" | "reversed_detect" | "keyword_pick";
+  image_url?: string | null;
+};
+
+export type Achievement = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: string;
+  target: number;
+  progress: number;
+  unlocked: boolean;
+  pct: number;
 };
 
 export type QuizResult = {
   correct: number;
   total: number;
   xp_earned: number;
+  xp_streak_bonus?: number;
   new_xp: number;
   new_level: number;
   new_hearts: number;
   new_streak: number;
   lesson_completed: boolean;
+  perfect?: boolean;
+  achievements_unlocked?: Achievement[];
 };
 
 export type Progress = {

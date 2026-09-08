@@ -10,6 +10,8 @@ import { colors, fonts } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import { api, Card, Lesson, imageUri, invalidateStaticCache } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
+import { DailyCardWidget } from "@/src/components/DailyCardWidget";
+import { OnboardingModal } from "@/src/components/OnboardingModal";
 
 export default function Home() {
   const router = useRouter();
@@ -59,6 +61,7 @@ export default function Home() {
   return (
     <View style={styles.root}>
       <StarBg count={30} />
+      <OnboardingModal />
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         {/* Sticky header */}
         <View style={styles.header} testID="home-header">
@@ -93,6 +96,7 @@ export default function Home() {
             }
             testID="home-scroll"
           >
+            <DailyCardWidget />
             <Text style={styles.sectionTitle}>Your Path</Text>
             <Text style={styles.sectionSub}>Walk the road of the Major Arcana</Text>
 

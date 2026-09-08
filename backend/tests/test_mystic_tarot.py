@@ -93,10 +93,10 @@ class TestCards:
         r = session.get(f"{API}/cards")
         assert r.status_code == 200
         cards = r.json()
-        assert len(cards) == 10, f"expected 10 cards, got {len(cards)}"
-        # sorted by number
-        numbers = [c["number"] for c in cards]
-        assert numbers == sorted(numbers)
+        assert len(cards) == 78, f"expected 78 cards, got {len(cards)}"
+        # cards sorted: Major first by number 0-21, then Minor by suit/number
+        majors = [c for c in cards if c.get("arcana") == "Major"]
+        assert [c["number"] for c in majors] == sorted([c["number"] for c in majors])
         # essential fields
         c = cards[0]
         for k in ("id", "name", "arcana", "keywords_upright", "keywords_reversed",
@@ -121,7 +121,7 @@ class TestLessons:
         r = session.get(f"{API}/lessons")
         assert r.status_code == 200
         lessons = r.json()
-        assert len(lessons) == 10
+        assert len(lessons) == 78
         orders = [l["order"] for l in lessons]
         assert orders == sorted(orders)
         l = lessons[0]
@@ -150,7 +150,7 @@ class TestQuizzes:
         assert r.status_code == 200
         quiz = r.json()
         assert quiz["lesson_id"] == lessons[0]["id"]
-        assert len(quiz["questions"]) == 3
+        assert len(quiz["questions"]) == 6
         for q in quiz["questions"]:
             assert "correct_index" not in q
             assert "options" in q and len(q["options"]) >= 2
@@ -167,12 +167,13 @@ class TestQuizzes:
         card = cards[lesson["card_id"]]
         quiz = session.get(f"{API}/quizzes/{lesson['id']}", headers=auth_headers).json()
 
-        # q1: first upright kw, q2: card name, q3: first reversed kw
+        # q1..: try mapping first N targets by heuristic; unmapped -> index 0
         targets = [card["keywords_upright"][0], card["name"], card["keywords_reversed"][0]]
         answers = []
         for i, q in enumerate(quiz["questions"]):
-            if targets[i] in q["options"]:
-                answers.append(q["options"].index(targets[i]))
+            target = targets[i] if i < len(targets) else None
+            if target and target in q["options"]:
+                answers.append(q["options"].index(target))
             else:
                 answers.append(0)
 
@@ -181,7 +182,7 @@ class TestQuizzes:
         })
         assert r.status_code == 200, r.text
         res = r.json()
-        assert res["total"] == 3
+        assert res["total"] == 6
         # Allow partial — but expect at least 1 correct from above mapping
         assert res["correct"] >= 1
         if res["correct"] >= 2:  # passed (>=60%)
@@ -237,5 +238,5 @@ class TestUsers:
                   "streak", "completed_lessons", "total_lessons", "completion_pct",
                   "completed_lesson_ids"):
             assert k in p
-        assert p["total_lessons"] == 10
+        assert p["total_lessons"] == 78
         assert 0 <= p["completion_pct"] <= 100

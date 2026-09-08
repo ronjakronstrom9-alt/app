@@ -30,7 +30,7 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
-SEED_VERSION = 8  # bump to re-seed
+SEED_VERSION = 10  # bump to re-seed (adds question_type + extra question variants)
 
 STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
 STATIC_CARDS_DIR.mkdir(exist_ok=True)
@@ -61,6 +61,7 @@ class UserOut(BaseModel):
     streak: int
     last_active_date: Optional[str] = None
     completed_lessons: List[str] = []
+    favorites: List[str] = []
     created_at: str
 
 class AuthResponse(BaseModel):
@@ -99,6 +100,9 @@ class QuizQuestion(BaseModel):
     options: List[str]
     correct_index: int
     explanation: str
+    question_type: str = "mcq"  # mcq | match_image | match_meaning | reversed_detect | keyword_pick
+    image_url: Optional[str] = None  # for match_image / reversed_detect
+    reversed_hint: Optional[bool] = None  # for reversed_detect (correct answer)
 
 class QuizSubmission(BaseModel):
     lesson_id: str
@@ -109,11 +113,14 @@ class QuizResult(BaseModel):
     correct: int
     total: int
     xp_earned: int
+    xp_streak_bonus: int = 0
     new_xp: int
     new_level: int
     new_hearts: int
     new_streak: int
     lesson_completed: bool
+    perfect: bool = False
+    achievements_unlocked: List[dict] = []
 
 
 # ===== AUTH HELPERS =====
@@ -154,6 +161,7 @@ def user_to_out(user: dict) -> UserOut:
         hearts=user.get('hearts', 5), streak=user.get('streak', 0),
         last_active_date=user.get('last_active_date'),
         completed_lessons=user.get('completed_lessons', []),
+        favorites=user.get('favorites', []),
         created_at=user.get('created_at', ''),
     )
 
@@ -245,7 +253,13 @@ async def get_quiz(lesson_id: str, user: dict = Depends(get_current_user)):
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
     public_qs = [
-        {"id": q['id'], "question": q['question'], "options": q['options']}
+        {
+            "id": q['id'],
+            "question": q['question'],
+            "options": q['options'],
+            "question_type": q.get('question_type', 'mcq'),
+            "image_url": q.get('image_url'),
+        }
         for q in quiz['questions']
     ]
     return {"id": quiz['id'], "lesson_id": quiz['lesson_id'], "questions": public_qs}
@@ -269,6 +283,7 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
     passed = correct >= max(1, int(total * 0.6))
 
     xp_earned = 0
+    xp_streak_bonus = 0
     completed_lessons = list(user.get('completed_lessons', []))
     lesson_completed = sub.lesson_id in completed_lessons
 
@@ -306,6 +321,20 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
             except Exception:
                 new_streak = 1
 
+    # Streak bonus XP tiers
+    if passed and new_streak > current_streak:
+        if new_streak >= 30:
+            xp_streak_bonus = 25
+        elif new_streak >= 14:
+            xp_streak_bonus = 15
+        elif new_streak >= 7:
+            xp_streak_bonus = 10
+        elif new_streak >= 3:
+            xp_streak_bonus = 5
+    xp_earned_total = xp_earned + xp_streak_bonus
+    new_xp = user.get('xp', 0) + xp_earned_total
+    new_level = xp_to_level(new_xp)
+
     update = {
         "xp": new_xp, "level": new_level, "hearts": new_hearts,
         "streak": new_streak, "completed_lessons": completed_lessons,
@@ -314,10 +343,18 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
         update["last_active_date"] = today
     await db.users.update_one({"id": user['id']}, {"$set": update})
 
+    # Compute newly-unlocked achievements
+    prev_user = dict(user)
+    new_user = {**user, **update}
+    achievements_unlocked = _diff_achievements(prev_user, new_user)
+
     return QuizResult(
-        correct=correct, total=total, xp_earned=xp_earned,
+        correct=correct, total=total, xp_earned=xp_earned_total,
+        xp_streak_bonus=xp_streak_bonus,
         new_xp=new_xp, new_level=new_level, new_hearts=new_hearts,
         new_streak=new_streak, lesson_completed=lesson_completed,
+        perfect=(correct == total),
+        achievements_unlocked=achievements_unlocked,
     )
 
 
@@ -325,6 +362,66 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
 async def refill_hearts(user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user['id']}, {"$set": {"hearts": 5}})
     return {"hearts": 5}
+
+
+# ===== FAVORITES =====
+class FavoriteReq(BaseModel):
+    card_id: str
+
+@api_router.post("/favorites/toggle")
+async def toggle_favorite(req: FavoriteReq, user: dict = Depends(get_current_user)):
+    favorites = list(user.get('favorites', []))
+    is_fav = req.card_id in favorites
+    if is_fav:
+        favorites.remove(req.card_id)
+    else:
+        favorites.append(req.card_id)
+    await db.users.update_one({"id": user['id']}, {"$set": {"favorites": favorites}})
+    return {"favorited": not is_fav, "favorites": favorites}
+
+@api_router.get("/favorites", response_model=List[TarotCard])
+async def list_favorites(user: dict = Depends(get_current_user)):
+    fav_ids = user.get('favorites', [])
+    if not fav_ids:
+        return []
+    cards = await db.cards.find({"id": {"$in": fav_ids}}, {"_id": 0}).to_list(200)
+    return [TarotCard(**c) for c in cards]
+
+
+# ===== NOTES =====
+class NoteReq(BaseModel):
+    card_id: str
+    text: str
+
+@api_router.get("/notes/{card_id}")
+async def get_note(card_id: str, user: dict = Depends(get_current_user)):
+    note = await db.notes.find_one({"user_id": user['id'], "card_id": card_id}, {"_id": 0})
+    return note or {"card_id": card_id, "text": ""}
+
+@api_router.post("/notes")
+async def save_note(req: NoteReq, user: dict = Depends(get_current_user)):
+    doc = {"user_id": user['id'], "card_id": req.card_id, "text": req.text,
+           "updated_at": datetime.now(timezone.utc).isoformat()}
+    await db.notes.update_one({"user_id": user['id'], "card_id": req.card_id},
+                              {"$set": doc}, upsert=True)
+    return {"ok": True}
+
+
+# ===== DAILY CARD =====
+import hashlib as _hashlib
+@api_router.get("/daily-card")
+async def daily_card(user: dict = Depends(get_current_user)):
+    """Deterministic 'card of the day' — same card all day per user, different
+    next day. Uses SHA1(user_id + iso_date) modulo card count to pick."""
+    today = date.today().isoformat()
+    total = await db.cards.count_documents({})
+    if total == 0:
+        raise HTTPException(status_code=404, detail="No cards")
+    seed = _hashlib.sha1(f"{user['id']}:{today}".encode()).hexdigest()
+    idx = int(seed, 16) % total
+    all_cards = await db.cards.find({}, {"_id": 0}).to_list(200)
+    card = all_cards[idx]
+    return {"date": today, "card": card, "prompt": "What does this card invite you to focus on today?"}
 
 
 @api_router.get("/users/progress")
@@ -343,6 +440,94 @@ async def progress(user: dict = Depends(get_current_user)):
         "completed_lessons": completed, "total_lessons": total_lessons,
         "completion_pct": round((completed / total_lessons) * 100) if total_lessons else 0,
         "completed_lesson_ids": user.get('completed_lessons', []),
+    }
+
+
+# ===== ACHIEVEMENTS =====
+# Achievements are computed dynamically from user state — no DB storage needed.
+# Each entry: id, title, description, icon (Ionicons name), category, target,
+# and a function to evaluate progress from user dict.
+ACHIEVEMENTS = [
+    {"id": "first_lesson", "title": "First Step", "desc": "Complete your first lesson",
+     "icon": "footsteps", "category": "beginner", "target": 1,
+     "getter": lambda u: len(u.get('completed_lessons', []))},
+    {"id": "five_lessons", "title": "Novice Reader", "desc": "Complete 5 lessons",
+     "icon": "book-outline", "category": "learning", "target": 5,
+     "getter": lambda u: len(u.get('completed_lessons', []))},
+    {"id": "ten_lessons", "title": "Devoted Student", "desc": "Complete 10 lessons",
+     "icon": "school", "category": "learning", "target": 10,
+     "getter": lambda u: len(u.get('completed_lessons', []))},
+    {"id": "major_master", "title": "Major Arcana Master", "desc": "Complete all 22 Major Arcana lessons",
+     "icon": "diamond", "category": "mastery", "target": 22,
+     "getter": lambda u: len(u.get('completed_lessons', []))},
+    {"id": "full_deck", "title": "Full Deck", "desc": "Complete all 78 lessons",
+     "icon": "trophy", "category": "mastery", "target": 78,
+     "getter": lambda u: len(u.get('completed_lessons', []))},
+    {"id": "streak_3", "title": "Rising Flame", "desc": "Maintain a 3-day streak",
+     "icon": "flame-outline", "category": "streak", "target": 3,
+     "getter": lambda u: u.get('streak', 0)},
+    {"id": "streak_7", "title": "Weekly Devotion", "desc": "Maintain a 7-day streak",
+     "icon": "flame", "category": "streak", "target": 7,
+     "getter": lambda u: u.get('streak', 0)},
+    {"id": "streak_30", "title": "Lunar Cycle", "desc": "Maintain a 30-day streak",
+     "icon": "moon", "category": "streak", "target": 30,
+     "getter": lambda u: u.get('streak', 0)},
+    {"id": "xp_100", "title": "First Spark", "desc": "Earn 100 XP",
+     "icon": "sparkles", "category": "xp", "target": 100,
+     "getter": lambda u: u.get('xp', 0)},
+    {"id": "xp_500", "title": "Rising Star", "desc": "Earn 500 XP",
+     "icon": "star", "category": "xp", "target": 500,
+     "getter": lambda u: u.get('xp', 0)},
+    {"id": "xp_1000", "title": "Celestial", "desc": "Earn 1,000 XP",
+     "icon": "star-outline", "category": "xp", "target": 1000,
+     "getter": lambda u: u.get('xp', 0)},
+    {"id": "level_5", "title": "Adept", "desc": "Reach level 5",
+     "icon": "trending-up", "category": "level", "target": 5,
+     "getter": lambda u: u.get('level', 1)},
+    {"id": "level_10", "title": "Oracle", "desc": "Reach level 10",
+     "icon": "eye", "category": "level", "target": 10,
+     "getter": lambda u: u.get('level', 1)},
+    {"id": "first_favorite", "title": "Bound by Fate", "desc": "Save your first favorite card",
+     "icon": "heart", "category": "collection", "target": 1,
+     "getter": lambda u: len(u.get('favorites', []))},
+    {"id": "five_favorites", "title": "Sacred Selection", "desc": "Save 5 favorite cards",
+     "icon": "heart-circle", "category": "collection", "target": 5,
+     "getter": lambda u: len(u.get('favorites', []))},
+]
+
+
+def _compute_achievement(a: dict, user: dict) -> dict:
+    """Serialize a single achievement for the given user."""
+    current = int(a['getter'](user))
+    target = a['target']
+    return {
+        "id": a['id'], "title": a['title'], "description": a['desc'],
+        "icon": a['icon'], "category": a['category'],
+        "target": target, "progress": min(current, target),
+        "unlocked": current >= target,
+        "pct": min(100, int(current * 100 / max(1, target))),
+    }
+
+
+def _diff_achievements(prev: dict, new: dict) -> list:
+    """Return list of achievements that were newly unlocked by the transition
+    from `prev` to `new` user state. Used to trigger celebration UI."""
+    unlocked = []
+    for a in ACHIEVEMENTS:
+        was = int(a['getter'](prev)) >= a['target']
+        is_now = int(a['getter'](new)) >= a['target']
+        if is_now and not was:
+            unlocked.append(_compute_achievement(a, new))
+    return unlocked
+
+
+@api_router.get("/achievements")
+async def list_achievements(user: dict = Depends(get_current_user)):
+    items = [_compute_achievement(a, user) for a in ACHIEVEMENTS]
+    return {
+        "total": len(items),
+        "unlocked": sum(1 for i in items if i['unlocked']),
+        "items": items,
     }
 
 
@@ -1032,44 +1217,130 @@ def make_lesson_for_card(card: dict, order: int) -> dict:
 
 def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = None) -> dict:
     qs = CUSTOM_QUIZ_BY_NAME.get(card['name'])
-    if qs:
-        questions = [{"id": str(uuid.uuid4()), **q} for q in qs]
-    else:
-        # Auto-generate 3 questions from card data for cards without hand-crafted quiz
-        others = other_cards or []
-        other_names = [c['name'] for c in others if c['id'] != card['id']][:3]
-        other_kw_up = []
-        other_kw_rev = []
-        for c in others:
-            if c['id'] == card['id']:
-                continue
-            for kw in c.get('keywords_upright', []):
-                if kw not in card['keywords_upright'] and kw not in other_kw_up:
-                    other_kw_up.append(kw); break
-            for kw in c.get('keywords_reversed', []):
-                if kw not in card['keywords_reversed'] and kw not in other_kw_rev:
-                    other_kw_rev.append(kw); break
+    others = other_cards or []
+    # Pre-compute reusable pools of "other" data
+    other_names = [c['name'] for c in others if c['id'] != card['id']]
+    other_kw_up_all: List[str] = []
+    other_kw_rev_all: List[str] = []
+    for c in others:
+        if c['id'] == card['id']:
+            continue
+        for kw in c.get('keywords_upright', []):
+            if kw not in card['keywords_upright'] and kw not in other_kw_up_all:
+                other_kw_up_all.append(kw)
+        for kw in c.get('keywords_reversed', []):
+            if kw not in card['keywords_reversed'] and kw not in other_kw_rev_all:
+                other_kw_rev_all.append(kw)
 
+    # Rotating pseudo-random pick without needing `random` (deterministic per card)
+    seed = sum(ord(x) for x in card['name'])
+    def pick(pool: List[str], n: int, offset: int = 0) -> List[str]:
+        if not pool:
+            return []
+        out = []
+        for i in range(min(n, len(pool))):
+            out.append(pool[(seed + offset + i * 7) % len(pool)])
+        # dedupe while preserving order
+        seen = set(); dedup = []
+        for x in out:
+            if x not in seen:
+                seen.add(x); dedup.append(x)
+        # top up if dedupe shrunk it
+        i = 0
+        while len(dedup) < n and i < len(pool):
+            if pool[i] not in seen:
+                dedup.append(pool[i]); seen.add(pool[i])
+            i += 1
+        return dedup[:n]
+
+    if qs:
+        questions = [{"id": str(uuid.uuid4()), "question_type": "mcq", **q} for q in qs]
+        # Augment with 2 image-based & 1 reversed-detect question for richer play
+        extras = []
+        name_opts = sorted([card['name']] + pick(other_names, 3, 1))
+        extras.append({
+            "id": str(uuid.uuid4()),
+            "question_type": "match_image",
+            "question": "Which card is shown in the image?",
+            "options": name_opts,
+            "correct_index": name_opts.index(card['name']),
+            "explanation": f"This is {card['name']}.",
+            "image_url": card.get('image_url'),
+        })
+        # Reversed detection: alternate correct answer by seed parity
+        is_reversed = (seed % 2 == 1)
+        prompt_kws = card['keywords_reversed'] if is_reversed else card['keywords_upright']
+        r_opts = ["Upright", "Reversed"]
+        extras.append({
+            "id": str(uuid.uuid4()),
+            "question_type": "reversed_detect",
+            "question": f"The keywords {', '.join(prompt_kws[:3])} describe which orientation of {card['name']}?",
+            "options": r_opts,
+            "correct_index": 1 if is_reversed else 0,
+            "explanation": f"These keywords match the {'reversed' if is_reversed else 'upright'} meaning of {card['name']}.",
+        })
+        # Keyword pick — 4-option keyword grid
         correct_kw = card['keywords_upright'][0]
-        opts1 = sorted([correct_kw] + other_kw_up[:3])
-        correct_rev = card['keywords_reversed'][0]
-        opts2 = sorted([correct_rev] + other_kw_rev[:3])
-        opts3 = sorted([card['name']] + other_names)
-        snippet = card['upright_meaning'].split('.')[0]
+        wrong_kws = pick(other_kw_up_all, 3, 2)
+        kw_opts = sorted(list(dict.fromkeys([correct_kw] + wrong_kws)))[:4]
+        while len(kw_opts) < 4 and other_kw_up_all:
+            for k in other_kw_up_all:
+                if k not in kw_opts:
+                    kw_opts.append(k); break
+            if len(kw_opts) >= 4:
+                break
+        kw_opts = sorted(kw_opts[:4])
+        extras.append({
+            "id": str(uuid.uuid4()),
+            "question_type": "keyword_pick",
+            "question": f"Which keyword best captures {card['name']} (upright)?",
+            "options": kw_opts,
+            "correct_index": kw_opts.index(correct_kw) if correct_kw in kw_opts else 0,
+            "explanation": f"{card['name']} centers on '{correct_kw}'.",
+        })
+        questions = questions + extras
+    else:
+        # Auto-generate 5 diverse questions from card data for cards without hand-crafted quiz
+        picked_names = pick(other_names, 3, 0)
+        correct_kw = card['keywords_upright'][0] if card.get('keywords_upright') else card['name']
+        wrong_up = pick(other_kw_up_all, 3, 1)
+        correct_rev = card['keywords_reversed'][0] if card.get('keywords_reversed') else 'imbalance'
+        wrong_rev = pick(other_kw_rev_all, 3, 2)
+
+        opts_kw_up = sorted(list(dict.fromkeys([correct_kw] + wrong_up)))
+        opts_kw_rev = sorted(list(dict.fromkeys([correct_rev] + wrong_rev)))
+        opts_name = sorted(list(dict.fromkeys([card['name']] + picked_names)))
+        snippet = card.get('upright_meaning', '').split('.')[0]
+        is_reversed = (seed % 2 == 1)
+        prompt_kws = card.get('keywords_reversed', []) if is_reversed else card.get('keywords_upright', [])
 
         questions = [
-            {"id": str(uuid.uuid4()),
+            {"id": str(uuid.uuid4()), "question_type": "match_image",
+             "question": "Which card is shown in the image?",
+             "options": opts_name,
+             "correct_index": opts_name.index(card['name']),
+             "explanation": f"This is {card['name']}.",
+             "image_url": card.get('image_url')},
+            {"id": str(uuid.uuid4()), "question_type": "keyword_pick",
              "question": f"Which keyword best captures {card['name']} (upright)?",
-             "options": opts1, "correct_index": opts1.index(correct_kw),
+             "options": opts_kw_up,
+             "correct_index": opts_kw_up.index(correct_kw),
              "explanation": f"{card['name']} centers on '{correct_kw}'."},
-            {"id": str(uuid.uuid4()),
-             "question": f"What does {card['name']} suggest when reversed?",
-             "options": opts2, "correct_index": opts2.index(correct_rev),
+            {"id": str(uuid.uuid4()), "question_type": "keyword_pick",
+             "question": f"Which keyword arises when {card['name']} is reversed?",
+             "options": opts_kw_rev,
+             "correct_index": opts_kw_rev.index(correct_rev),
              "explanation": f"Reversed, {card['name']} evokes '{correct_rev}'."},
-            {"id": str(uuid.uuid4()),
+            {"id": str(uuid.uuid4()), "question_type": "match_meaning",
              "question": f"Which card matches this teaching: \"{snippet}.\"?",
-             "options": opts3, "correct_index": opts3.index(card['name']),
+             "options": opts_name,
+             "correct_index": opts_name.index(card['name']),
              "explanation": f"This describes {card['name']}."},
+            {"id": str(uuid.uuid4()), "question_type": "reversed_detect",
+             "question": f"The keywords {', '.join(prompt_kws[:3])} describe which orientation of {card['name']}?",
+             "options": ["Upright", "Reversed"],
+             "correct_index": 1 if is_reversed else 0,
+             "explanation": f"These keywords match the {'reversed' if is_reversed else 'upright'} meaning."},
         ]
 
     return {"id": str(uuid.uuid4()), "lesson_id": lesson_id, "questions": questions}

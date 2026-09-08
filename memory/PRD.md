@@ -33,3 +33,13 @@ A Duolingo-style mobile learning app that teaches tarot card meanings via bite-s
 - POST /quizzes/submit — returns updated XP, level, hearts, streak
 - POST /users/refill-hearts
 - GET /users/progress
+
+## Phase 3 (June 2026)
+- **Diverse quiz types**: 5 formats — mcq, match_image (card image → name grid), match_meaning, reversed_detect (Upright/Reversed tiles), keyword_pick (pill grid). Backend generates 6 mixed questions per lesson.
+- **Achievements**: 15 total across beginner/learning/mastery/streak/xp/level/collection categories. Computed dynamically; new unlocks returned in quiz-submit response.
+- **Streak bonus XP**: +5 at 3d, +10 at 7d, +15 at 14d, +25 at 30d (fires on streak-increment days).
+- **Animations (react-native-reanimated)**: card flip on card detail, XP celebration particle burst on result, animated XP counter, glowing streak badge, spring-in achievement rows, animated quiz progress bar.
+- **New endpoint**: GET /api/achievements → {total, unlocked, items}
+
+## Files Added
+- /app/frontend/src/components/XpCelebration.tsx (particle burst + AnimatedNumber + StreakBadge)
