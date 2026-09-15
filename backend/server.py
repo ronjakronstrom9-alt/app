@@ -32,7 +32,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
 SEED_VERSION = 10  # bump to re-seed (adds question_type + extra question variants)
-COMBO_SEED_VERSION = 2  # bump to re-seed card-combination practice data
+COMBO_SEED_VERSION = 3  # bump to re-seed card-combination practice data
 INITIAL_COMBO_UNLOCK = 5  # combos unlocked from the start; more unlock as the user masters them
 
 STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
@@ -649,6 +649,111 @@ COMBO_DEFINITIONS = [
         ],
         "correct_index": 0,
         "explanation": "The Magician is having the skill and will to manifest a goal. The Emperor is structure, discipline, and a clear plan. Together they describe turning raw ability into real results by channeling it through solid, organized effort.",
+    },
+    {
+        "card_names": ["The Fool", "Wheel of Fortune"],
+        "context": "growth",
+        "difficulty": 2,
+        "order": 17,
+        "question": "What do these cards suggest about taking a new opportunity right now?",
+        "options": [
+            "Circumstances are shifting in your favor — it's a good moment to take the leap with an open heart",
+            "It's better to reject any new opportunity until everything feels perfectly certain",
+            "Nothing about the current situation is going to change",
+            "This combination means a past mistake is guaranteed to repeat itself",
+        ],
+        "correct_index": 0,
+        "explanation": "The Fool is an open-hearted new beginning taken on faith. Wheel of Fortune is a shift in circumstances arriving through cycles beyond full control. Together they suggest fate is presenting a genuine opening — stepping into it, rather than waiting for certainty, is the right move.",
+    },
+    {
+        "card_names": ["The Sun", "Judgement"],
+        "context": "growth",
+        "difficulty": 2,
+        "order": 18,
+        "question": "What do these cards suggest about a moment of self-reflection?",
+        "options": [
+            "An honest look back at past choices is leading to genuine clarity, relief, and renewed confidence",
+            "The past should be completely ignored and never examined",
+            "This is a sign of failure with nothing positive to take from it",
+            "Self-reflection is pointless because outcomes are already fixed",
+        ],
+        "correct_index": 0,
+        "explanation": "Judgement is an honest reckoning with the past — a call to look clearly at where you've been. The Sun is joy, vitality, and things becoming clear. Together they describe self-reflection that, once faced honestly, brings real relief and renewed confidence.",
+    },
+    {
+        "card_names": ["The Tower", "Death"],
+        "context": "growth",
+        "difficulty": 3,
+        "order": 19,
+        "question": "These two cards can look alarming together. What do they most likely mean?",
+        "options": [
+            "A sudden, forced ending is clearing away something that could not last — real transformation now becomes possible",
+            "A literal disaster is definitely about to happen",
+            "Together they mean absolutely nothing significant",
+            "The situation will resolve itself with no need for any change",
+        ],
+        "correct_index": 0,
+        "explanation": "The Tower is sudden, unavoidable upheaval. Death is a deep, necessary ending that makes way for transformation. Neither is literal — together they describe a forced but ultimately clarifying collapse of something outdated, opening space for real change.",
+    },
+    {
+        "card_names": ["The Empress", "Temperance"],
+        "context": "love",
+        "difficulty": 1,
+        "order": 20,
+        "question": "What do these cards suggest about nurturing a relationship?",
+        "options": [
+            "Warmth and care grow best when combined with patience and gentle balance, not rushed or forced",
+            "A relationship only needs passion, with no need for patience",
+            "Nothing in the relationship needs any care or attention",
+            "One partner should completely control all decisions",
+        ],
+        "correct_index": 0,
+        "explanation": "The Empress is warmth, nurturing, and abundant care. Temperance is patience and gentle balance between opposites. Together they describe a relationship that flourishes through steady, patient nurturing rather than intensity or force.",
+    },
+    {
+        "card_names": ["The Moon", "The Hanged Man"],
+        "context": "growth",
+        "difficulty": 2,
+        "order": 21,
+        "question": "What do these cards suggest about a period of uncertainty?",
+        "options": [
+            "The way forward isn't clear yet, and the wisest choice is to pause and wait rather than force a decision",
+            "A clear, certain answer is guaranteed within the next day",
+            "It's best to force a decision immediately no matter how unclear things are",
+            "The uncertainty means the situation is hopeless",
+        ],
+        "correct_index": 0,
+        "explanation": "The Moon signals confusion and things not yet being clear. The Hanged Man is a willing pause — surrendering the need to act right away. Together they suggest that in genuine uncertainty, patience serves better than forcing an unclear decision.",
+    },
+    {
+        "card_names": ["The Chariot", "The Devil"],
+        "context": "work",
+        "difficulty": 3,
+        "order": 22,
+        "question": "What warning do these cards give about pursuing a goal?",
+        "options": [
+            "Strong drive to succeed may be tipping into unhealthy obsession, cutting corners, or ignoring real costs",
+            "Ambition is always completely safe no matter how it's pursued",
+            "The goal should be abandoned immediately with no further effort",
+            "Other people are entirely responsible for the outcome",
+        ],
+        "correct_index": 0,
+        "explanation": "The Chariot is strong will and determined drive toward a goal. The Devil warns of unhealthy attachment, compulsion, or ignoring consequences. Together they caution that fierce drive, unchecked, can slide into obsession or shortcuts that cause harm later.",
+    },
+    {
+        "card_names": ["Strength", "The Hierophant"],
+        "context": "work",
+        "difficulty": 2,
+        "order": 23,
+        "question": "What do these cards suggest about handling a difficult situation at work?",
+        "options": [
+            "Quiet inner courage combined with guidance from experience or established wisdom leads to the best outcome",
+            "Only aggressive confrontation will resolve the situation",
+            "Ignoring established knowledge and tradition is always the better path",
+            "The situation requires no personal courage at all",
+        ],
+        "correct_index": 0,
+        "explanation": "Strength is calm, inner courage and self-control. The Hierophant represents guidance, tradition, and learning from established wisdom or mentors. Together they suggest facing a hard situation well means pairing quiet resolve with respect for proven wisdom.",
     },
 ]
 
