@@ -32,7 +32,8 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
 SEED_VERSION = 10  # bump to re-seed (adds question_type + extra question variants)
-COMBO_SEED_VERSION = 1  # bump to re-seed card-combination practice data
+COMBO_SEED_VERSION = 2  # bump to re-seed card-combination practice data
+INITIAL_COMBO_UNLOCK = 5  # combos unlocked from the start; more unlock as the user masters them
 
 STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
 STATIC_CARDS_DIR.mkdir(exist_ok=True)
@@ -138,6 +139,8 @@ class ComboQuestionOut(BaseModel):
     cards: List[ComboCardOut]
     question: str
     options: List[str]
+    combos_unlocked: int
+    combos_total: int
 
 
 class ComboAnswerReq(BaseModel):
@@ -152,6 +155,9 @@ class ComboAnswerResult(BaseModel):
     xp_earned: int
     new_xp: int
     new_level: int
+    newly_unlocked: bool = False
+    combos_unlocked: int
+    combos_total: int
 
 
 # ===== AUTH HELPERS =====
@@ -398,13 +404,17 @@ async def refill_hearts(user: dict = Depends(get_current_user)):
 # ===== CARD COMBOS =====
 # "Card Combinations" practice: 2-3 cards shown together, user interprets
 # their COMBINED meaning (not each card separately). Hand-curated for
-# quality — MVP ships with 10 combos across love/work/growth contexts.
+# quality, covering every Major Arcana card at least once.
 # Difficulty 1 = easy-but-not-trivial, one clearly-best answer among four.
+# `order` drives progressive unlocking (see INITIAL_COMBO_UNLOCK below) —
+# lower order = unlocked earlier. Minor Arcana combos can be appended later
+# with higher `order` values without changing this structure.
 COMBO_DEFINITIONS = [
     {
         "card_names": ["The Lovers", "Justice"],
         "context": "love",
         "difficulty": 1,
+        "order": 1,
         "question": "What is the combined message of these cards for a relationship?",
         "options": [
             "An important relationship choice must be made, weighing both feelings and consequences fairly",
@@ -419,6 +429,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Fool", "The Sun"],
         "context": "growth",
         "difficulty": 1,
+        "order": 2,
         "question": "What do these two cards suggest about a new chapter in life?",
         "options": [
             "A joyful new beginning that is likely to bring genuine happiness and success",
@@ -433,6 +444,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Tower", "The Star"],
         "context": "growth",
         "difficulty": 1,
+        "order": 3,
         "question": "What story do these cards tell together?",
         "options": [
             "A sudden, difficult upheaval is followed by healing, hope, and renewal",
@@ -447,6 +459,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["Death", "The World"],
         "context": "growth",
         "difficulty": 1,
+        "order": 4,
         "question": "What do these cards mean when they appear together?",
         "options": [
             "An important chapter is ending, making way for a sense of completion and a new cycle",
@@ -461,6 +474,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Empress", "The Emperor"],
         "context": "love",
         "difficulty": 2,
+        "order": 5,
         "question": "What do these cards suggest about balance in a partnership?",
         "options": [
             "The relationship benefits from combining warmth and nurturing with structure and stability",
@@ -475,6 +489,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Moon", "The High Priestess"],
         "context": "growth",
         "difficulty": 2,
+        "order": 6,
         "question": "What do these cards suggest about a confusing situation?",
         "options": [
             "The full picture isn't clear yet — trusting quiet intuition matters more than facts right now",
@@ -489,6 +504,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Chariot", "Strength"],
         "context": "work",
         "difficulty": 2,
+        "order": 7,
         "question": "What do these cards say about achieving a goal?",
         "options": [
             "Success comes from steady willpower and inner resolve, not from force or aggression",
@@ -503,6 +519,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["Wheel of Fortune", "Justice"],
         "context": "work",
         "difficulty": 3,
+        "order": 8,
         "question": "In a work or career context, what do these cards suggest together?",
         "options": [
             "A shift in circumstances is arriving, and how things unfold will depend on fair, honest choices",
@@ -517,6 +534,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Hermit", "The Star"],
         "context": "growth",
         "difficulty": 2,
+        "order": 9,
         "question": "What do these cards suggest about a period of solitude?",
         "options": [
             "Time spent alone in reflection is quietly restoring hope and inner clarity",
@@ -531,6 +549,7 @@ COMBO_DEFINITIONS = [
         "card_names": ["The Devil", "The Lovers"],
         "context": "love",
         "difficulty": 3,
+        "order": 10,
         "question": "What warning do these cards give about a relationship?",
         "options": [
             "There may be an unhealthy attachment or dependency clouding what should be a genuine, free connection",
@@ -540,6 +559,96 @@ COMBO_DEFINITIONS = [
         ],
         "correct_index": 0,
         "explanation": "The Devil points to unhealthy attachment, temptation, or feeling trapped. The Lovers represents genuine connection and free choice. Together they warn that something — jealousy, dependency, or obligation — may be replacing real, free-hearted connection.",
+    },
+    {
+        "card_names": ["The Magician", "The High Priestess"],
+        "context": "growth",
+        "difficulty": 2,
+        "order": 11,
+        "question": "What do these two cards suggest about how to move forward?",
+        "options": [
+            "Combine deliberate, focused action with quiet inner listening rather than relying on only one",
+            "Only bold, visible action matters — inner reflection is a waste of time",
+            "The only path forward is to wait passively and do nothing at all",
+            "Ask a large group of strangers for advice before deciding anything",
+        ],
+        "correct_index": 0,
+        "explanation": "The Magician is conscious will and skillful action — making things happen. The High Priestess is quiet intuition and inner knowing. Together they suggest that the best path forward blends purposeful action with listening to instinct, instead of leaning on only one.",
+    },
+    {
+        "card_names": ["The Hierophant", "The Lovers"],
+        "context": "love",
+        "difficulty": 2,
+        "order": 12,
+        "question": "What tension do these cards point to in a relationship?",
+        "options": [
+            "Balancing tradition, family, or convention with a genuinely personal choice of the heart",
+            "The relationship must follow tradition exactly with no room for personal feelings",
+            "Family and tradition have no relevance to romantic choices",
+            "The relationship should be kept a complete secret from everyone",
+        ],
+        "correct_index": 0,
+        "explanation": "The Hierophant represents tradition, convention, and institutions like marriage or family expectations. The Lovers represents a personal, heartfelt choice. Together they describe navigating a relationship decision that involves both what tradition expects and what the heart genuinely wants.",
+    },
+    {
+        "card_names": ["The Hanged Man", "The Hermit"],
+        "context": "growth",
+        "difficulty": 2,
+        "order": 13,
+        "question": "What do these cards suggest is needed right now?",
+        "options": [
+            "A deliberate pause to reflect deeply before taking any further action",
+            "Immediate, fast action without any further thought",
+            "Involving as many other people as possible in the decision",
+            "Ignoring the situation entirely until it resolves itself",
+        ],
+        "correct_index": 0,
+        "explanation": "The Hanged Man is suspension — willingly pausing and seeing things from a new angle. The Hermit is introspection and stepping back. Together they suggest this is a moment to stop pushing forward and instead sit quietly with the situation before acting.",
+    },
+    {
+        "card_names": ["Temperance", "The Star"],
+        "context": "growth",
+        "difficulty": 1,
+        "order": 14,
+        "question": "What do these cards suggest about healing from a difficult time?",
+        "options": [
+            "Healing is happening gradually, through patience and balance rather than a dramatic fix",
+            "Nothing can be done to improve the situation",
+            "The fastest, most extreme solution is the best one",
+            "Healing has already fully finished with nothing left to do",
+        ],
+        "correct_index": 0,
+        "explanation": "Temperance is patience, moderation, and gentle blending of opposites. The Star is hope and quiet healing. Together they describe recovery that comes through steady, balanced small steps — not a sudden dramatic fix.",
+    },
+    {
+        "card_names": ["Judgement", "The World"],
+        "context": "growth",
+        "difficulty": 2,
+        "order": 15,
+        "question": "What do these cards mean when they appear together?",
+        "options": [
+            "A major turning point where past choices are reckoned with, completing one whole cycle before the next begins",
+            "A minor, unimportant event with no lasting significance",
+            "A sign to repeat past mistakes exactly as before",
+            "An unrelated financial windfall is guaranteed",
+        ],
+        "correct_index": 0,
+        "explanation": "Judgement is a moment of reckoning, reflection, and awakening to a bigger truth. The World is completion and wholeness. Together they mark a significant turning point — looking honestly at where you've been right as one full chapter closes.",
+    },
+    {
+        "card_names": ["The Magician", "The Emperor"],
+        "context": "work",
+        "difficulty": 2,
+        "order": 16,
+        "question": "What do these cards suggest about reaching a work goal?",
+        "options": [
+            "Applying focused skill within a clear, disciplined plan is what will make the goal real",
+            "Talent alone is enough — no planning or structure is needed",
+            "Rules and structure will only get in the way of success",
+            "The goal will resolve itself without any effort",
+        ],
+        "correct_index": 0,
+        "explanation": "The Magician is having the skill and will to manifest a goal. The Emperor is structure, discipline, and a clear plan. Together they describe turning raw ability into real results by channeling it through solid, organized effort.",
     },
 ]
 
@@ -560,11 +669,13 @@ def _combo_seed_docs(seeded_cards_by_name: dict) -> list:
             "card_ids": card_ids,
             "context": c['context'],
             "difficulty": c['difficulty'],
+            "order": c.get('order', 999),
             "question": c['question'],
             "options": c['options'],
             "correct_index": c['correct_index'],
             "explanation": c['explanation'],
         })
+    docs.sort(key=lambda d: d['order'])
     return docs
 
 
@@ -593,12 +704,20 @@ def _combo_pick_weight(combo_id: str, stats: dict) -> float:
     return 1.0 + wrong * 2.0
 
 
+def _combos_unlocked_count(total: int, mastered_count: int) -> int:
+    return min(total, INITIAL_COMBO_UNLOCK + mastered_count)
+
+
 @api_router.get("/combos/next", response_model=ComboQuestionOut)
 async def next_combo(exclude: Optional[str] = None, user: dict = Depends(get_current_user)):
-    combos = await db.combos.find({}, {"_id": 0}).to_list(200)
+    combos = await db.combos.find({}, {"_id": 0}).sort("order", 1).to_list(200)
     if not combos:
         raise HTTPException(status_code=404, detail="No card combos available")
-    pool = [c for c in combos if c['id'] != exclude] or combos
+    mastered = user.get('combo_mastered', [])
+    unlocked_count = _combos_unlocked_count(len(combos), len(mastered))
+    unlocked = combos[:unlocked_count]
+
+    pool = [c for c in unlocked if c['id'] != exclude] or unlocked
     stats = user.get('combo_stats', {})
     weights = [_combo_pick_weight(c['id'], stats) for c in pool]
     combo = random.choices(pool, weights=weights, k=1)[0]
@@ -614,6 +733,8 @@ async def next_combo(exclude: Optional[str] = None, user: dict = Depends(get_cur
         cards=[ComboCardOut(id=c['id'], name=c['name'], image_url=c['image_url']) for c in ordered_cards],
         question=combo['question'],
         options=combo['options'],
+        combos_unlocked=unlocked_count,
+        combos_total=len(combos),
     )
 
 
@@ -623,6 +744,7 @@ async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_use
     if not combo:
         raise HTTPException(status_code=404, detail="Combo not found")
 
+    total_combos = await db.combos.count_documents({})
     correct = req.answer_index == combo['correct_index']
     xp_earned = 15 if correct else 0
 
@@ -636,11 +758,24 @@ async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_use
     s['last_seen'] = datetime.now(timezone.utc).isoformat()
     stats[req.combo_id] = s
 
+    mastered = list(user.get('combo_mastered', []))
+    prev_unlocked = _combos_unlocked_count(total_combos, len(mastered))
+    newly_unlocked = False
+    if correct and req.combo_id not in mastered:
+        mastered.append(req.combo_id)
+        new_unlocked = _combos_unlocked_count(total_combos, len(mastered))
+        newly_unlocked = new_unlocked > prev_unlocked
+    else:
+        new_unlocked = prev_unlocked
+
     new_xp = user.get('xp', 0) + xp_earned
     new_level = xp_to_level(new_xp)
     await db.users.update_one(
         {"id": user['id']},
-        {"$set": {"xp": new_xp, "level": new_level, "combo_stats": stats}},
+        {"$set": {
+            "xp": new_xp, "level": new_level,
+            "combo_stats": stats, "combo_mastered": mastered,
+        }},
     )
 
     return ComboAnswerResult(
@@ -650,6 +785,9 @@ async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_use
         xp_earned=xp_earned,
         new_xp=new_xp,
         new_level=new_level,
+        newly_unlocked=newly_unlocked,
+        combos_unlocked=new_unlocked,
+        combos_total=total_combos,
     )
 
 

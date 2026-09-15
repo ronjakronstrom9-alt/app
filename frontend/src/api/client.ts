@@ -128,6 +128,8 @@ export type ComboQuestion = {
   cards: ComboCard[];
   question: string;
   options: string[];
+  combos_unlocked: number;
+  combos_total: number;
 };
 
 export type ComboAnswerResult = {
@@ -137,6 +139,9 @@ export type ComboAnswerResult = {
   xp_earned: number;
   new_xp: number;
   new_level: number;
+  newly_unlocked: boolean;
+  combos_unlocked: number;
+  combos_total: number;
 };
 
 export type DailyEntry = {

@@ -32,7 +32,6 @@ export default function CardCombosScreen() {
   const [feedback, setFeedback] = useState<ComboAnswerResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sessionXp, setSessionXp] = useState(0);
-  const [sessionRound, setSessionRound] = useState(1);
 
   const loadNext = useCallback(async (excludeId?: string) => {
     setLoading(true);
@@ -69,7 +68,6 @@ export default function CardCombosScreen() {
   };
 
   const onContinue = () => {
-    setSessionRound((r) => r + 1);
     loadNext(combo?.id);
   };
 
@@ -103,7 +101,7 @@ export default function CardCombosScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }}>
             <Text style={s.headerTitle}>Card Combinations</Text>
-            <Text style={s.headerSub}>Round {sessionRound}</Text>
+            <Text style={s.headerSub}>{combo.combos_unlocked} / {combo.combos_total} unlocked</Text>
           </View>
           <View style={s.xpBox}>
             <Ionicons name="star" size={16} color={colors.goldGlow} />
@@ -182,6 +180,12 @@ export default function CardCombosScreen() {
                 </Text>
               </View>
               <Text style={s.explainBody}>{feedback.explanation}</Text>
+              {feedback.newly_unlocked ? (
+                <View style={s.unlockRow}>
+                  <Ionicons name="lock-open" size={14} color={colors.gold} />
+                  <Text style={s.unlockText}>New combination unlocked!</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
@@ -308,6 +312,8 @@ const styles = (c: any) =>
     explainHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
     explainTitle: { fontFamily: fonts.display, fontSize: 13, letterSpacing: 1 },
     explainBody: { color: c.textSecondary, fontSize: 14, lineHeight: 21 },
+    unlockRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+    unlockText: { color: c.gold, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
 
     footer: { padding: 20 },
     cta: { backgroundColor: c.gold, paddingVertical: 16, borderRadius: 999, alignItems: "center" },
