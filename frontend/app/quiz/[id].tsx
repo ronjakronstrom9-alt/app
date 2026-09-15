@@ -20,8 +20,6 @@ import { useAuth } from "@/src/context/auth";
 import { StarBg } from "@/src/components/StarBg";
 import { XpCelebration, AnimatedNumber, StreakBadge } from "@/src/components/XpCelebration";
 
-type Feedback = null | "locked";
-
 export default function QuizScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -33,7 +31,6 @@ export default function QuizScreen() {
   const [idx, setIdx] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<Feedback>(null);
   const [heartsLost] = useState(0);
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<QuizResult | null>(null);
@@ -54,9 +51,9 @@ export default function QuizScreen() {
 
   useEffect(() => {
     if (!questions.length) return;
-    const pct = ((idx + (feedback ? 1 : 0)) / questions.length) * 100;
+    const pct = (idx / questions.length) * 100;
     progressAnim.value = withTiming(pct, { duration: 400, easing: Easing.out(Easing.cubic) });
-  }, [idx, feedback, questions.length]);
+  }, [idx, questions.length]);
 
   const progressStyle = useAnimatedStyle(() => ({ width: `${progressAnim.value}%` }));
 
@@ -77,13 +74,8 @@ export default function QuizScreen() {
   const heartsRemaining = Math.max(0, (user?.hearts || 0) - heartsLost);
 
   const onPick = (i: number) => {
-    if (feedback) return;
+    if (submitting) return;
     setSelected(i);
-  };
-
-  const onCheck = () => {
-    if (selected === null) return;
-    setFeedback("locked");
   };
 
   const onContinue = async () => {
@@ -91,7 +83,6 @@ export default function QuizScreen() {
     const nextAnswers = [...answers, selected];
     setAnswers(nextAnswers);
     setSelected(null);
-    setFeedback(null);
 
     if (idx < questions.length - 1) {
       setIdx(idx + 1);
@@ -132,21 +123,15 @@ export default function QuizScreen() {
             q={q}
             selected={selected}
             onPick={onPick}
-            locked={!!feedback}
+            locked={submitting}
             colors={colors}
           />
         </ScrollView>
 
         <View style={s.footer}>
-          {feedback ? (
-            <View style={s.feedbackCard} testID="quiz-feedback">
-              <Ionicons name="checkmark-circle" size={22} color={colors.gold} />
-              <Text style={s.feedbackText}>Locked in — the stars will weigh your answer.</Text>
-            </View>
-          ) : null}
           <TouchableOpacity
             style={[s.cta, (selected === null || submitting) && { opacity: 0.5 }]}
-            onPress={feedback ? onContinue : onCheck}
+            onPress={onContinue}
             disabled={selected === null || submitting}
             testID="quiz-continue-btn"
             activeOpacity={0.85}
@@ -154,9 +139,7 @@ export default function QuizScreen() {
             {submitting ? (
               <ActivityIndicator color={colors.bg} />
             ) : (
-              <Text style={s.ctaText}>
-                {feedback ? (isFinal ? "Finish" : "Continue") : "Check"}
-              </Text>
+              <Text style={s.ctaText}>{isFinal ? "Finish" : "Continue"}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -504,12 +487,6 @@ const styles = (c: any) =>
     keywordTextActive: { color: c.bg, fontWeight: "700" },
 
     footer: { padding: 20, gap: 10 },
-    feedbackCard: {
-      flexDirection: "row", alignItems: "center", gap: 10,
-      backgroundColor: c.surface, borderRadius: 14, padding: 14,
-      borderWidth: 1, borderColor: c.borderSoft,
-    },
-    feedbackText: { color: c.textPrimary, fontSize: 13, flex: 1 },
     cta: { backgroundColor: c.gold, paddingVertical: 16, borderRadius: 999, alignItems: "center" },
     ctaText: { color: c.bg, fontWeight: "700", fontSize: 16, letterSpacing: 0.5 },
 
