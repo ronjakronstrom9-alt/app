@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone, date
 import bcrypt
 import jwt as pyjwt
 import urllib.request
+import random
 import time as _time
 from io import BytesIO
 from PIL import Image as PILImage
@@ -31,6 +32,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'mystic-tarot-secret-key-change-me')
 JWT_ALG = 'HS256'
 JWT_EXPIRE_DAYS = 30
 SEED_VERSION = 10  # bump to re-seed (adds question_type + extra question variants)
+COMBO_SEED_VERSION = 1  # bump to re-seed card-combination practice data
 
 STATIC_CARDS_DIR = ROOT_DIR / "static_cards"
 STATIC_CARDS_DIR.mkdir(exist_ok=True)
@@ -121,6 +123,35 @@ class QuizResult(BaseModel):
     lesson_completed: bool
     perfect: bool = False
     achievements_unlocked: List[dict] = []
+
+
+class ComboCardOut(BaseModel):
+    id: str
+    name: str
+    image_url: str
+
+
+class ComboQuestionOut(BaseModel):
+    id: str
+    context: str
+    difficulty: int
+    cards: List[ComboCardOut]
+    question: str
+    options: List[str]
+
+
+class ComboAnswerReq(BaseModel):
+    combo_id: str
+    answer_index: int
+
+
+class ComboAnswerResult(BaseModel):
+    correct: bool
+    correct_index: int
+    explanation: str
+    xp_earned: int
+    new_xp: int
+    new_level: int
 
 
 # ===== AUTH HELPERS =====
@@ -362,6 +393,264 @@ async def submit_quiz(sub: QuizSubmission, user: dict = Depends(get_current_user
 async def refill_hearts(user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user['id']}, {"$set": {"hearts": 5}})
     return {"hearts": 5}
+
+
+# ===== CARD COMBOS =====
+# "Card Combinations" practice: 2-3 cards shown together, user interprets
+# their COMBINED meaning (not each card separately). Hand-curated for
+# quality — MVP ships with 10 combos across love/work/growth contexts.
+# Difficulty 1 = easy-but-not-trivial, one clearly-best answer among four.
+COMBO_DEFINITIONS = [
+    {
+        "card_names": ["The Lovers", "Justice"],
+        "context": "love",
+        "difficulty": 1,
+        "question": "What is the combined message of these cards for a relationship?",
+        "options": [
+            "An important relationship choice must be made, weighing both feelings and consequences fairly",
+            "The relationship is destined to end soon, no matter what either person does",
+            "One partner should give up their own needs entirely to keep the peace",
+            "Money problems are about to seriously damage the relationship",
+        ],
+        "correct_index": 0,
+        "explanation": "The Lovers is about connection, values, and meaningful choices in relationships. Justice is about fairness, truth, and weighing consequences. Together they point to a real decision in a relationship that needs to be made honestly — with both the heart and the head.",
+    },
+    {
+        "card_names": ["The Fool", "The Sun"],
+        "context": "growth",
+        "difficulty": 1,
+        "question": "What do these two cards suggest about a new chapter in life?",
+        "options": [
+            "A joyful new beginning that is likely to bring genuine happiness and success",
+            "A reckless decision that will end in embarrassment",
+            "A slow, cautious process with no real progress for a long time",
+            "A situation that requires expert legal advice before moving forward",
+        ],
+        "correct_index": 0,
+        "explanation": "The Fool represents a fresh start taken with an open heart. The Sun represents joy, vitality, and things going well. Together, they describe a new beginning that is genuinely full of promise — this is one of the most positive combinations in the deck.",
+    },
+    {
+        "card_names": ["The Tower", "The Star"],
+        "context": "growth",
+        "difficulty": 1,
+        "question": "What story do these cards tell together?",
+        "options": [
+            "A sudden, difficult upheaval is followed by healing, hope, and renewal",
+            "Everything will collapse permanently with no chance of recovery",
+            "Nothing significant is changing right now",
+            "A small argument will be quickly forgotten with no lasting effect",
+        ],
+        "correct_index": 0,
+        "explanation": "The Tower is sudden, disruptive change — something breaks down that needed to. The Star follows it with calm, hope, and healing. Together they describe the classic pattern of crisis giving way to renewal once the dust settles.",
+    },
+    {
+        "card_names": ["Death", "The World"],
+        "context": "growth",
+        "difficulty": 1,
+        "question": "What do these cards mean when they appear together?",
+        "options": [
+            "An important chapter is ending, making way for a sense of completion and a new cycle",
+            "A literal death or tragedy is about to occur",
+            "Nothing will ever change again",
+            "A short trip or vacation is coming up",
+        ],
+        "correct_index": 0,
+        "explanation": "Death rarely means literal death — it means an ending, a transformation. The World represents completion, wholeness, and fulfillment. Together they suggest that closing one chapter completely is exactly what allows a satisfying new cycle to begin.",
+    },
+    {
+        "card_names": ["The Empress", "The Emperor"],
+        "context": "love",
+        "difficulty": 2,
+        "question": "What do these cards suggest about balance in a partnership?",
+        "options": [
+            "The relationship benefits from combining warmth and nurturing with structure and stability",
+            "One partner is secretly planning to leave",
+            "The relationship has no real problems and needs no attention",
+            "Only one partner's opinion should matter in decisions",
+        ],
+        "correct_index": 0,
+        "explanation": "The Empress embodies nurturing, warmth, and abundance. The Emperor embodies structure, stability, and responsibility. Together they describe a healthy partnership where care and reliability support each other — neither quality alone is enough.",
+    },
+    {
+        "card_names": ["The Moon", "The High Priestess"],
+        "context": "growth",
+        "difficulty": 2,
+        "question": "What do these cards suggest about a confusing situation?",
+        "options": [
+            "The full picture isn't clear yet — trusting quiet intuition matters more than facts right now",
+            "The situation is completely straightforward and nothing is hidden",
+            "It's best to ask as many other people as possible for their opinion",
+            "A definite answer will arrive within 24 hours",
+        ],
+        "correct_index": 0,
+        "explanation": "The Moon signals uncertainty, illusion, and things not being fully clear. The High Priestess represents inner knowing and intuition. Together they suggest that in a confusing moment, logic alone won't cut through the fog — quiet inner listening will.",
+    },
+    {
+        "card_names": ["The Chariot", "Strength"],
+        "context": "work",
+        "difficulty": 2,
+        "question": "What do these cards say about achieving a goal?",
+        "options": [
+            "Success comes from steady willpower and inner resolve, not from force or aggression",
+            "Success is impossible without help from other people",
+            "Giving up now is the wisest choice",
+            "Success will come purely from luck, with no effort required",
+        ],
+        "correct_index": 0,
+        "explanation": "The Chariot is determined forward motion and willpower. Strength is quiet inner courage and self-control, not brute force. Together they describe achieving a goal through calm, disciplined persistence rather than aggression or chance.",
+    },
+    {
+        "card_names": ["Wheel of Fortune", "Justice"],
+        "context": "work",
+        "difficulty": 3,
+        "question": "In a work or career context, what do these cards suggest together?",
+        "options": [
+            "A shift in circumstances is arriving, and how things unfold will depend on fair, honest choices",
+            "Nothing about the current job situation will ever change",
+            "Cutting corners now will have no consequences later",
+            "A promotion is guaranteed no matter what happens",
+        ],
+        "correct_index": 0,
+        "explanation": "The Wheel of Fortune signals change and shifting cycles beyond full control. Justice brings accountability, fairness, and cause-and-effect. Together they suggest that change is coming, and the choices made in response — fair or not — will shape the outcome.",
+    },
+    {
+        "card_names": ["The Hermit", "The Star"],
+        "context": "growth",
+        "difficulty": 2,
+        "question": "What do these cards suggest about a period of solitude?",
+        "options": [
+            "Time spent alone in reflection is quietly restoring hope and inner clarity",
+            "Isolating from others will only make things worse",
+            "This is a sign to make a big public announcement immediately",
+            "Solitude means the person has been forgotten by everyone",
+        ],
+        "correct_index": 0,
+        "explanation": "The Hermit represents introspection and stepping back to reflect. The Star represents hope, healing, and renewal. Together they describe solitude that is restorative rather than lonely — quiet reflection leading toward genuine hope.",
+    },
+    {
+        "card_names": ["The Devil", "The Lovers"],
+        "context": "love",
+        "difficulty": 3,
+        "question": "What warning do these cards give about a relationship?",
+        "options": [
+            "There may be an unhealthy attachment or dependency clouding what should be a genuine, free connection",
+            "The relationship is perfect and needs no attention",
+            "The couple should get married immediately",
+            "Physical distance is the only problem in the relationship",
+        ],
+        "correct_index": 0,
+        "explanation": "The Devil points to unhealthy attachment, temptation, or feeling trapped. The Lovers represents genuine connection and free choice. Together they warn that something — jealousy, dependency, or obligation — may be replacing real, free-hearted connection.",
+    },
+]
+
+
+def _combo_seed_docs(seeded_cards_by_name: dict) -> list:
+    docs = []
+    for c in COMBO_DEFINITIONS:
+        card_ids = []
+        for name in c['card_names']:
+            card = seeded_cards_by_name.get(name)
+            if not card:
+                continue
+            card_ids.append(card['id'])
+        if len(card_ids) != len(c['card_names']):
+            continue
+        docs.append({
+            "id": str(uuid.uuid4()),
+            "card_ids": card_ids,
+            "context": c['context'],
+            "difficulty": c['difficulty'],
+            "question": c['question'],
+            "options": c['options'],
+            "correct_index": c['correct_index'],
+            "explanation": c['explanation'],
+        })
+    return docs
+
+
+async def seed_combos():
+    meta = await db.meta.find_one({"_id": "combo_seed"}) or {}
+    current = meta.get("version", 0)
+    if current >= COMBO_SEED_VERSION:
+        return
+    all_cards = await db.cards.find({}, {"_id": 0}).to_list(200)
+    by_name = {c['name']: c for c in all_cards}
+    docs = _combo_seed_docs(by_name)
+    if not docs:
+        logger.warning("Combo seed skipped: no matching cards found yet.")
+        return
+    await db.combos.delete_many({})
+    await db.combos.insert_many(docs)
+    await db.meta.update_one({"_id": "combo_seed"}, {"$set": {"version": COMBO_SEED_VERSION}}, upsert=True)
+    logger.info(f"Seeded {len(docs)} card combos.")
+
+
+def _combo_pick_weight(combo_id: str, stats: dict) -> float:
+    s = stats.get(combo_id)
+    if not s:
+        return 3.0  # never seen — prioritize covering the full set first
+    wrong = s.get('wrong', 0)
+    return 1.0 + wrong * 2.0
+
+
+@api_router.get("/combos/next", response_model=ComboQuestionOut)
+async def next_combo(exclude: Optional[str] = None, user: dict = Depends(get_current_user)):
+    combos = await db.combos.find({}, {"_id": 0}).to_list(200)
+    if not combos:
+        raise HTTPException(status_code=404, detail="No card combos available")
+    pool = [c for c in combos if c['id'] != exclude] or combos
+    stats = user.get('combo_stats', {})
+    weights = [_combo_pick_weight(c['id'], stats) for c in pool]
+    combo = random.choices(pool, weights=weights, k=1)[0]
+
+    card_docs = await db.cards.find({"id": {"$in": combo['card_ids']}}, {"_id": 0}).to_list(10)
+    cards_by_id = {c['id']: c for c in card_docs}
+    ordered_cards = [cards_by_id[cid] for cid in combo['card_ids'] if cid in cards_by_id]
+
+    return ComboQuestionOut(
+        id=combo['id'],
+        context=combo['context'],
+        difficulty=combo.get('difficulty', 1),
+        cards=[ComboCardOut(id=c['id'], name=c['name'], image_url=c['image_url']) for c in ordered_cards],
+        question=combo['question'],
+        options=combo['options'],
+    )
+
+
+@api_router.post("/combos/answer", response_model=ComboAnswerResult)
+async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_user)):
+    combo = await db.combos.find_one({"id": req.combo_id}, {"_id": 0})
+    if not combo:
+        raise HTTPException(status_code=404, detail="Combo not found")
+
+    correct = req.answer_index == combo['correct_index']
+    xp_earned = 15 if correct else 0
+
+    stats = dict(user.get('combo_stats', {}))
+    s = dict(stats.get(req.combo_id, {"wrong": 0, "correct": 0}))
+    if correct:
+        s['correct'] = s.get('correct', 0) + 1
+        s['wrong'] = max(0, s.get('wrong', 0) - 1)  # answering well fades repetition faster
+    else:
+        s['wrong'] = s.get('wrong', 0) + 1
+    s['last_seen'] = datetime.now(timezone.utc).isoformat()
+    stats[req.combo_id] = s
+
+    new_xp = user.get('xp', 0) + xp_earned
+    new_level = xp_to_level(new_xp)
+    await db.users.update_one(
+        {"id": user['id']},
+        {"$set": {"xp": new_xp, "level": new_level, "combo_stats": stats}},
+    )
+
+    return ComboAnswerResult(
+        correct=correct,
+        correct_index=combo['correct_index'],
+        explanation=combo['explanation'],
+        xp_earned=xp_earned,
+        new_xp=new_xp,
+        new_level=new_level,
+    )
 
 
 # ===== FAVORITES =====
@@ -1413,6 +1702,7 @@ async def seed_data():
     if current >= SEED_VERSION:
         await _repoint_card_images()
         await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
+        await seed_combos()
         return
     logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
     await db.cards.delete_many({})
@@ -1447,6 +1737,7 @@ async def seed_data():
 
     await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
     logger.info(f"Re-seed complete ({len(seeded_cards)} cards).")
+    await seed_combos()
 
 
 async def _repoint_card_images():

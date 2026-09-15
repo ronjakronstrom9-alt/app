@@ -97,6 +97,21 @@ export default function Home() {
             testID="home-scroll"
           >
             <DailyCardWidget />
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => router.push("/combos")}
+              style={styles.combosCard}
+              testID="combos-entry-card"
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.combosKicker}>✦  New  ✦</Text>
+                <Text style={styles.combosTitle}>Card Combinations</Text>
+                <Text style={styles.combosSub}>Interpret two or three cards read together</Text>
+              </View>
+              <Ionicons name="chevron-forward-circle" size={32} color={colors.gold} />
+            </TouchableOpacity>
+
             <Text style={styles.sectionTitle}>Your Path</Text>
             <Text style={styles.sectionSub}>Walk the road of the Major Arcana</Text>
 
@@ -204,6 +219,14 @@ const styles = StyleSheet.create({
   barTrack: { height: 6, backgroundColor: colors.surface, borderRadius: 999, overflow: "hidden" },
   barFill: { height: "100%", backgroundColor: colors.gold, borderRadius: 999 },
   scroll: { padding: 20, paddingBottom: 60 },
+  combosCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    marginBottom: 12, padding: 16, borderRadius: 18,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.gold,
+  },
+  combosKicker: { color: colors.gold, fontFamily: fonts.display, fontSize: 10, letterSpacing: 2, textTransform: "uppercase" },
+  combosTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontWeight: "700", fontSize: 17, marginTop: 3 },
+  combosSub: { color: colors.textSecondary, fontSize: 12, marginTop: 3 },
   sectionTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 26, marginTop: 8 },
   sectionSub: { color: colors.textSecondary, fontSize: 14, marginBottom: 24 },
   path: { gap: 32, paddingVertical: 8 },

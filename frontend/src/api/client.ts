@@ -112,6 +112,31 @@ export const api = {
     ),
   saveReflection: (dateIso: string, text: string) =>
     request<{ ok: boolean }>("POST", "/daily-history/reflect", { date: dateIso, text }),
+
+  nextCombo: (excludeId?: string) =>
+    request<ComboQuestion>("GET", `/combos/next${excludeId ? `?exclude=${excludeId}` : ""}`),
+  answerCombo: (comboId: string, answerIndex: number) =>
+    request<ComboAnswerResult>("POST", "/combos/answer", { combo_id: comboId, answer_index: answerIndex }),
+};
+
+export type ComboCard = { id: string; name: string; image_url: string };
+
+export type ComboQuestion = {
+  id: string;
+  context: string;
+  difficulty: number;
+  cards: ComboCard[];
+  question: string;
+  options: string[];
+};
+
+export type ComboAnswerResult = {
+  correct: boolean;
+  correct_index: number;
+  explanation: string;
+  xp_earned: number;
+  new_xp: number;
+  new_level: number;
 };
 
 export type DailyEntry = {
