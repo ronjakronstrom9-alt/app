@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withSequence, withSpring, Easing, interpolate,
+  useSharedValue, useAnimatedStyle, withTiming, withSequence, withSpring, withDelay, withRepeat, Easing, interpolate,
 } from "react-native-reanimated";
 import { useTheme, fonts } from "@/src/theme";
 import { api, ComboQuestion, ComboAnswerResult, imageUri } from "@/src/api/client";
@@ -18,6 +18,12 @@ const CONTEXT_LABEL: Record<string, string> = {
   love: "Love",
   work: "Work & Purpose",
   growth: "Personal Growth",
+};
+
+const CONTEXT_ICON: Record<string, string> = {
+  love: "heart",
+  work: "briefcase",
+  growth: "leaf",
 };
 
 export default function CardCombosScreen() {
@@ -111,12 +117,15 @@ export default function CardCombosScreen() {
 
         <ScrollView contentContainerStyle={s.scroll} testID="combos-scroll">
           <View style={s.contextPill}>
+            <Ionicons name={(CONTEXT_ICON[combo.context] || "sparkles") as any} size={12} color={colors.gold} />
             <Text style={s.contextPillText}>{CONTEXT_LABEL[combo.context] || combo.context}</Text>
           </View>
 
           <CardSpread cards={combo.cards} colors={colors} />
 
-          <Text style={s.question}>{combo.question}</Text>
+          <FadeInUp key={`${combo.id}-q`} delay={220}>
+            <Text style={s.question}>{combo.question}</Text>
+          </FadeInUp>
 
           <View style={s.options}>
             {combo.options.map((opt, i) => {
@@ -124,69 +133,72 @@ export default function CardCombosScreen() {
               const isCorrectAns = feedback && i === feedback.correct_index;
               const isWrongPick = feedback && isSel && !feedback.correct;
               return (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => onPick(i)}
-                  disabled={!!feedback}
-                  activeOpacity={0.85}
-                  style={[
-                    s.option,
-                    isSel && !feedback && s.optionSelected,
-                    isCorrectAns && s.optionCorrect,
-                    isWrongPick && s.optionWrong,
-                  ]}
-                  testID={`combo-option-${i}`}
-                >
-                  <View
+                <FadeInUp key={`${combo.id}-${i}`} delay={300 + i * 90}>
+                  <AnimatedOption
+                    onPress={() => onPick(i)}
+                    disabled={!!feedback}
                     style={[
-                      s.optionBullet,
-                      isSel && !feedback && s.optionBulletActive,
-                      isCorrectAns && s.optionBulletCorrect,
-                      isWrongPick && s.optionBulletWrong,
+                      s.option,
+                      isSel && !feedback && s.optionSelected,
+                      isCorrectAns && s.optionCorrect,
+                      isWrongPick && s.optionWrong,
                     ]}
+                    pulse={isSel && !feedback}
+                    testID={`combo-option-${i}`}
                   >
-                    {isCorrectAns ? (
-                      <Ionicons name="checkmark" size={14} color={colors.bg} />
-                    ) : isWrongPick ? (
-                      <Ionicons name="close" size={14} color={colors.bg} />
-                    ) : isSel ? (
-                      <Ionicons name="checkmark" size={14} color={colors.bg} />
-                    ) : null}
-                  </View>
-                  <Text
-                    style={[
-                      s.optionText,
-                      isSel && !feedback && s.optionTextSelected,
-                      (isCorrectAns || isWrongPick) && { fontWeight: "600" },
-                    ]}
-                  >
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
+                    <View
+                      style={[
+                        s.optionBullet,
+                        isSel && !feedback && s.optionBulletActive,
+                        isCorrectAns && s.optionBulletCorrect,
+                        isWrongPick && s.optionBulletWrong,
+                      ]}
+                    >
+                      {isCorrectAns ? (
+                        <Ionicons name="checkmark" size={14} color={colors.bg} />
+                      ) : isWrongPick ? (
+                        <Ionicons name="close" size={14} color={colors.bg} />
+                      ) : isSel ? (
+                        <Ionicons name="checkmark" size={14} color={colors.bg} />
+                      ) : null}
+                    </View>
+                    <Text
+                      style={[
+                        s.optionText,
+                        isSel && !feedback && s.optionTextSelected,
+                        (isCorrectAns || isWrongPick) && { fontWeight: "600" },
+                      ]}
+                    >
+                      {opt}
+                    </Text>
+                  </AnimatedOption>
+                </FadeInUp>
               );
             })}
           </View>
 
           {feedback ? (
-            <View style={[s.explainCard, feedback.correct ? s.explainCardGood : s.explainCardBad]}>
-              <View style={s.explainHeader}>
-                <Ionicons
-                  name={feedback.correct ? "checkmark-circle" : "moon"}
-                  size={20}
-                  color={feedback.correct ? colors.green : colors.crimson}
-                />
-                <Text style={[s.explainTitle, { color: feedback.correct ? colors.green : colors.crimson }]}>
-                  {feedback.correct ? `Correct — +${feedback.xp_earned} XP` : "Not quite"}
-                </Text>
-              </View>
-              <Text style={s.explainBody}>{feedback.explanation}</Text>
-              {feedback.newly_unlocked ? (
-                <View style={s.unlockRow}>
-                  <Ionicons name="lock-open" size={14} color={colors.gold} />
-                  <Text style={s.unlockText}>New combination unlocked!</Text>
+            <PopIn>
+              <View style={[s.explainCard, feedback.correct ? s.explainCardGood : s.explainCardBad]}>
+                <View style={s.explainHeader}>
+                  <Ionicons
+                    name={feedback.correct ? "checkmark-circle" : "moon"}
+                    size={20}
+                    color={feedback.correct ? colors.green : colors.crimson}
+                  />
+                  <Text style={[s.explainTitle, { color: feedback.correct ? colors.green : colors.crimson }]}>
+                    {feedback.correct ? `Correct — +${feedback.xp_earned} XP` : "Not quite"}
+                  </Text>
                 </View>
-              ) : null}
-            </View>
+                <Text style={s.explainBody}>{feedback.explanation}</Text>
+                {feedback.newly_unlocked ? (
+                  <View style={s.unlockRow}>
+                    <Ionicons name="lock-open" size={14} color={colors.gold} />
+                    <Text style={s.unlockText}>New combination unlocked!</Text>
+                  </View>
+                ) : null}
+              </View>
+            </PopIn>
           ) : null}
         </ScrollView>
 
@@ -215,23 +227,56 @@ function CardSpread({ cards, colors }: { cards: ComboQuestion["cards"]; colors: 
   const mid = (cards.length - 1) / 2;
   return (
     <View style={s.spreadRow}>
+      <SpreadGlow colors={colors} />
       {cards.map((c, i) => (
-        <SpreadCard key={c.id} card={c} rotate={(i - mid) * 7} colors={colors} />
+        <SpreadCard key={c.id} card={c} rotate={(i - mid) * 7} index={i} colors={colors} />
       ))}
     </View>
   );
 }
 
-function SpreadCard({ card, rotate, colors }: { card: { name: string; image_url: string }; rotate: number; colors: any }) {
+/** Soft pulsing gold glow behind the card spread, evoking candlelight on a reading table. */
+function SpreadGlow({ colors }: { colors: any }) {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.quad) }), -1, true);
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.25 + pulse.value * 0.2,
+    transform: [{ scale: 1 + pulse.value * 0.08 }],
+  }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute", width: 220, height: 140, borderRadius: 999,
+          backgroundColor: colors.goldGlow,
+          top: "50%", marginTop: -70,
+          left: "50%", marginLeft: -110,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+function SpreadCard({
+  card, rotate, index, colors,
+}: { card: { name: string; image_url: string }; rotate: number; index: number; colors: any }) {
   const s = styles(colors);
   const enter = useSharedValue(0);
   useEffect(() => {
-    enter.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) });
+    enter.value = withDelay(
+      index * 130,
+      withSpring(1, { damping: 11, stiffness: 90 }),
+    );
   }, [card.name]);
   const style = useAnimatedStyle(() => ({
-    opacity: enter.value,
+    opacity: interpolate(enter.value, [0, 0.4, 1], [0, 1, 1]),
     transform: [
-      { translateY: interpolate(enter.value, [0, 1], [24, 0]) },
+      { translateY: interpolate(enter.value, [0, 1], [30, 0]) },
+      { scale: interpolate(enter.value, [0, 1], [0.85, 1]) },
       { rotate: `${rotate}deg` },
     ],
   }));
@@ -239,6 +284,57 @@ function SpreadCard({ card, rotate, colors }: { card: { name: string; image_url:
     <Animated.View style={[s.spreadCardWrap, style]}>
       <Image source={{ uri: imageUri(card.image_url) }} style={s.spreadCardImg} resizeMode="cover" />
       <Text style={s.spreadCardName} numberOfLines={1}>{card.name}</Text>
+    </Animated.View>
+  );
+}
+
+/** Simple fade + rise-in wrapper for staggering the reveal of question/options. */
+function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const enter = useSharedValue(0);
+  useEffect(() => {
+    enter.value = withDelay(delay, withTiming(1, { duration: 450, easing: Easing.out(Easing.cubic) }));
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: enter.value,
+    transform: [{ translateY: interpolate(enter.value, [0, 1], [14, 0]) }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
+/** Gentle spring pop-in, used for the feedback/explanation card. */
+function PopIn({ children }: { children: React.ReactNode }) {
+  const enter = useSharedValue(0);
+  useEffect(() => {
+    enter.value = withSpring(1, { damping: 14, stiffness: 120 });
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: enter.value,
+    transform: [{ scale: interpolate(enter.value, [0, 1], [0.92, 1]) }],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
+/** Answer row with a light bounce whenever it becomes the selected option. */
+function AnimatedOption({
+  children, onPress, disabled, style, pulse, testID,
+}: {
+  children: React.ReactNode; onPress: () => void; disabled: boolean; style: any; pulse: boolean; testID?: string;
+}) {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    if (pulse) {
+      scale.value = withSequence(
+        withTiming(1.03, { duration: 110, easing: Easing.out(Easing.cubic) }),
+        withSpring(1, { damping: 10, stiffness: 180 }),
+      );
+    }
+  }, [pulse]);
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Animated.View style={animStyle}>
+      <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.85} style={style} testID={testID}>
+        {children}
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -260,6 +356,7 @@ const styles = (c: any) =>
     scroll: { padding: 24, gap: 20, paddingBottom: 40 },
 
     contextPill: {
+      flexDirection: "row", alignItems: "center", gap: 6,
       alignSelf: "center", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
       borderWidth: 1, borderColor: c.gold, backgroundColor: c.surface,
     },
@@ -268,6 +365,7 @@ const styles = (c: any) =>
     spreadRow: {
       flexDirection: "row", justifyContent: "center", alignItems: "flex-end",
       gap: 4, marginTop: 4, marginBottom: 8, minHeight: 190,
+      position: "relative",
     },
     spreadCardWrap: { alignItems: "center", gap: 6, marginHorizontal: -4 },
     spreadCardImg: {
