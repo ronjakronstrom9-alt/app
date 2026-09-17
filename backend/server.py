@@ -298,10 +298,42 @@ async def get_quiz(lesson_id: str, user: dict = Depends(get_current_user)):
             "options": q['options'],
             "question_type": q.get('question_type', 'mcq'),
             "image_url": q.get('image_url'),
+            "hint": q.get('hint'),
         }
         for q in quiz['questions']
     ]
     return {"id": quiz['id'], "lesson_id": quiz['lesson_id'], "questions": public_qs}
+
+
+class QuizCheckReq(BaseModel):
+    lesson_id: str
+    question_id: str
+    answer_index: int
+
+
+class QuizCheckResult(BaseModel):
+    correct: bool
+    correct_index: int
+    explanation: str
+
+
+@api_router.post("/quizzes/check", response_model=QuizCheckResult)
+async def check_quiz_answer(req: QuizCheckReq, user: dict = Depends(get_current_user)):
+    """Immediate per-question feedback — called after the learner picks an
+    option but before they continue, so they see whether they were right and
+    why. Doesn't affect scoring: /quizzes/submit independently re-checks the
+    final answers when the quiz is finished."""
+    quiz = await db.quizzes.find_one({"lesson_id": req.lesson_id}, {"_id": 0})
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    q = next((q for q in quiz['questions'] if q['id'] == req.question_id), None)
+    if not q:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return QuizCheckResult(
+        correct=req.answer_index == q['correct_index'],
+        correct_index=q['correct_index'],
+        explanation=q.get('explanation', ''),
+    )
 
 
 @api_router.post("/quizzes/submit", response_model=QuizResult)
@@ -1873,6 +1905,21 @@ def make_lesson_for_card(card: dict, order: int) -> dict:
     }
 
 
+def _quiz_hint(question_type: str, card: dict) -> str:
+    """A short, non-spoiling nudge shown only if the learner asks for it —
+    never gives away the correct option, just points attention somewhere useful."""
+    name = card['name']
+    if question_type == "match_image":
+        return "Compare the picture to the imagery you've studied for each card."
+    if question_type == "reversed_detect":
+        return "Upright keywords tend to feel empowering or flowing; reversed ones often feel blocked, delayed, or turned inward."
+    if question_type == "keyword_pick":
+        return f"Think about {name}'s core theme — you can always revisit its card page for a refresher."
+    if question_type == "match_meaning":
+        return f"Match the feeling of the quote to the card whose meaning fits it best."
+    return f"Think about {name}'s core meaning, then apply it to this situation."
+
+
 def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = None) -> dict:
     qs = CUSTOM_QUIZ_BY_NAME.get(card['name'])
     others = other_cards or []
@@ -1912,7 +1959,7 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
         return dedup[:n]
 
     if qs:
-        questions = [{"id": str(uuid.uuid4()), "question_type": "mcq", **q} for q in qs]
+        questions = [{"id": str(uuid.uuid4()), "question_type": "mcq", "hint": _quiz_hint("mcq", card), **q} for q in qs]
         # Augment with 2 image-based & 1 reversed-detect question for richer play
         extras = []
         name_opts = sorted([card['name']] + pick(other_names, 3, 1))
@@ -1924,6 +1971,7 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
             "correct_index": name_opts.index(card['name']),
             "explanation": f"This is {card['name']}.",
             "image_url": card.get('image_url'),
+            "hint": _quiz_hint("match_image", card),
         })
         # Reversed detection: alternate correct answer by seed parity
         is_reversed = (seed % 2 == 1)
@@ -1936,6 +1984,7 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
             "options": r_opts,
             "correct_index": 1 if is_reversed else 0,
             "explanation": f"These keywords match the {'reversed' if is_reversed else 'upright'} meaning of {card['name']}.",
+            "hint": _quiz_hint("reversed_detect", card),
         })
         # Keyword pick — 4-option keyword grid
         correct_kw = card['keywords_upright'][0]
@@ -1955,6 +2004,7 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
             "options": kw_opts,
             "correct_index": kw_opts.index(correct_kw) if correct_kw in kw_opts else 0,
             "explanation": f"{card['name']} centers on '{correct_kw}'.",
+            "hint": _quiz_hint("keyword_pick", card),
         })
         questions = questions + extras
     else:
@@ -1978,27 +2028,32 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
              "options": opts_name,
              "correct_index": opts_name.index(card['name']),
              "explanation": f"This is {card['name']}.",
-             "image_url": card.get('image_url')},
+             "image_url": card.get('image_url'),
+             "hint": _quiz_hint("match_image", card)},
             {"id": str(uuid.uuid4()), "question_type": "keyword_pick",
              "question": f"Which keyword best captures {card['name']} (upright)?",
              "options": opts_kw_up,
              "correct_index": opts_kw_up.index(correct_kw),
-             "explanation": f"{card['name']} centers on '{correct_kw}'."},
+             "explanation": f"{card['name']} centers on '{correct_kw}'.",
+             "hint": _quiz_hint("keyword_pick", card)},
             {"id": str(uuid.uuid4()), "question_type": "keyword_pick",
              "question": f"Which keyword arises when {card['name']} is reversed?",
              "options": opts_kw_rev,
              "correct_index": opts_kw_rev.index(correct_rev),
-             "explanation": f"Reversed, {card['name']} evokes '{correct_rev}'."},
+             "explanation": f"Reversed, {card['name']} evokes '{correct_rev}'.",
+             "hint": _quiz_hint("keyword_pick", card)},
             {"id": str(uuid.uuid4()), "question_type": "match_meaning",
              "question": f"Which card matches this teaching: \"{snippet}.\"?",
              "options": opts_name,
              "correct_index": opts_name.index(card['name']),
-             "explanation": f"This describes {card['name']}."},
+             "explanation": f"This describes {card['name']}.",
+             "hint": _quiz_hint("match_meaning", card)},
             {"id": str(uuid.uuid4()), "question_type": "reversed_detect",
              "question": f"The keywords {', '.join(prompt_kws[:3])} describe which orientation of {card['name']}?",
              "options": ["Upright", "Reversed"],
              "correct_index": 1 if is_reversed else 0,
-             "explanation": f"These keywords match the {'reversed' if is_reversed else 'upright'} meaning."},
+             "explanation": f"These keywords match the {'reversed' if is_reversed else 'upright'} meaning.",
+             "hint": _quiz_hint("reversed_detect", card)},
         ]
 
     return {"id": str(uuid.uuid4()), "lesson_id": lesson_id, "questions": questions}
@@ -2019,6 +2074,30 @@ async def backfill_quick_examples():
         )
 
 
+async def backfill_quiz_hints():
+    """Additive, non-destructive: adds the new per-question `hint` field to
+    quizzes seeded before it existed. Leaves options/correct_index/ids/
+    explanation untouched, so it never disturbs an in-progress attempt or
+    changes scoring — safe to run on every startup, and a no-op once done."""
+    async for quiz in db.quizzes.find({}):
+        questions = quiz.get('questions', [])
+        if not questions or all(q.get('hint') for q in questions):
+            continue
+        lesson = await db.lessons.find_one({"id": quiz['lesson_id']}, {"_id": 0, "card_id": 1})
+        if not lesson:
+            continue
+        card = await db.cards.find_one({"id": lesson['card_id']}, {"_id": 0, "name": 1})
+        if not card:
+            continue
+        changed = False
+        for q in questions:
+            if not q.get('hint'):
+                q['hint'] = _quiz_hint(q.get('question_type', 'mcq'), card)
+                changed = True
+        if changed:
+            await db.quizzes.update_one({"id": quiz['id']}, {"$set": {"questions": questions}})
+
+
 @app.on_event("startup")
 async def seed_data():
     # Extend WIKI_SOURCES with 56 Minor Arcana entries (name -> (url, filename))
@@ -2035,6 +2114,7 @@ async def seed_data():
         await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
         await seed_combos()
         await backfill_quick_examples()
+        await backfill_quiz_hints()
         return
     logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
     await db.cards.delete_many({})

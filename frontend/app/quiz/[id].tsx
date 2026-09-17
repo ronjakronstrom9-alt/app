@@ -35,6 +35,9 @@ export default function QuizScreen() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [checked, setChecked] = useState<{ correct: boolean; correct_index: number; explanation: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [hintShown, setHintShown] = useState(false);
 
   const progressAnim = useSharedValue(0);
 
@@ -74,8 +77,24 @@ export default function QuizScreen() {
   const heartsRemaining = Math.max(0, (user?.hearts || 0) - heartsLost);
 
   const onPick = (i: number) => {
-    if (submitting) return;
+    if (submitting || checked) return;
     setSelected(i);
+  };
+
+  const onCheck = async () => {
+    if (selected === null || checking) return;
+    setChecking(true);
+    try {
+      const res = await api.checkQuizAnswer(id, q.id, selected);
+      setChecked(res);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const onRetry = () => {
+    setChecked(null);
+    setSelected(null);
   };
 
   const onContinue = async () => {
@@ -83,6 +102,8 @@ export default function QuizScreen() {
     const nextAnswers = [...answers, selected];
     setAnswers(nextAnswers);
     setSelected(null);
+    setChecked(null);
+    setHintShown(false);
 
     if (idx < questions.length - 1) {
       setIdx(idx + 1);
@@ -116,30 +137,78 @@ export default function QuizScreen() {
         </View>
 
         <ScrollView contentContainerStyle={s.scroll}>
-          <Text style={s.qNumber}>
-            {qKindLabel(q.question_type)} · {idx + 1} of {questions.length}
-          </Text>
+          <View style={s.qNumberRow}>
+            <Text style={s.qNumber}>
+              {qKindLabel(q.question_type)} · {idx + 1} of {questions.length}
+            </Text>
+            {!!q.hint && !checked && (
+              <TouchableOpacity
+                onPress={() => setHintShown((v) => !v)}
+                style={s.hintBtn}
+                testID="quiz-hint-btn"
+                activeOpacity={0.8}
+              >
+                <Ionicons name="bulb-outline" size={13} color={colors.gold} />
+                <Text style={s.hintBtnText}>{hintShown ? "Hide hint" : "Hint"}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {hintShown && !!q.hint && !checked && (
+            <View style={s.hintBox}>
+              <Text style={s.hintText}>{q.hint}</Text>
+            </View>
+          )}
+
           <QuestionBody
             q={q}
             selected={selected}
             onPick={onPick}
-            locked={submitting}
+            locked={submitting || checking || !!checked}
+            checked={checked}
             colors={colors}
           />
+
+          {checked && (
+            <View style={[s.feedbackBox, checked.correct ? s.feedbackCorrect : s.feedbackWrong]}>
+              <View style={s.feedbackHeader}>
+                <Ionicons
+                  name={checked.correct ? "checkmark-circle" : "close-circle"}
+                  size={18}
+                  color={checked.correct ? colors.green : colors.crimson}
+                />
+                <Text style={[s.feedbackTitle, { color: checked.correct ? colors.green : colors.crimson }]}>
+                  {checked.correct ? "Correct" : "Not quite"}
+                </Text>
+              </View>
+              <Text style={s.feedbackExplanation}>{checked.explanation}</Text>
+            </View>
+          )}
         </ScrollView>
 
         <View style={s.footer}>
+          {checked && !checked.correct && (
+            <TouchableOpacity
+              onPress={onRetry}
+              style={s.retryBtn}
+              testID="quiz-retry-btn"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="refresh" size={14} color={colors.gold} />
+              <Text style={s.retryText}>Try again</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            style={[s.cta, (selected === null || submitting) && { opacity: 0.5 }]}
-            onPress={onContinue}
-            disabled={selected === null || submitting}
-            testID="quiz-continue-btn"
+            style={[s.cta, (selected === null || submitting || checking) && { opacity: 0.5 }]}
+            onPress={checked ? onContinue : onCheck}
+            disabled={selected === null || submitting || checking}
+            testID={checked ? "quiz-continue-btn" : "quiz-check-btn"}
             activeOpacity={0.85}
           >
-            {submitting ? (
+            {submitting || checking ? (
               <ActivityIndicator color={colors.bg} />
             ) : (
-              <Text style={s.ctaText}>{isFinal ? "Finish" : "Continue"}</Text>
+              <Text style={s.ctaText}>{checked ? (isFinal ? "Finish" : "Continue") : "Check Answer"}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -148,14 +217,29 @@ export default function QuizScreen() {
   );
 }
 
+type CheckedState = { correct: boolean; correct_index: number; explanation: string } | null;
+
+// "correct"/"wrong" only apply once checked !== null; before that it's just
+// plain selection styling. This is shared by every question-type renderer
+// below so the color logic (and its meaning) stays consistent across them.
+function optionVariant(i: number, selected: number | null, checked: CheckedState): "selected" | "correct" | "wrong" | "neutral" {
+  if (checked) {
+    if (i === checked.correct_index) return "correct";
+    if (i === selected) return "wrong";
+    return "neutral";
+  }
+  return i === selected ? "selected" : "neutral";
+}
+
 // ============ QUESTION BODY ============
 function QuestionBody({
-  q, selected, onPick, locked, colors,
+  q, selected, onPick, locked, checked, colors,
 }: {
   q: QuizQuestion;
   selected: number | null;
   onPick: (i: number) => void;
   locked: boolean;
+  checked: CheckedState;
   colors: any;
 }) {
   const s = styles(colors);
@@ -170,7 +254,7 @@ function QuestionBody({
             <Image source={{ uri: imageUri(q.image_url) }} style={s.image} resizeMode="cover" />
           </View>
         ) : null}
-        <OptionsGrid options={q.options} selected={selected} onPick={onPick} locked={locked} colors={colors} />
+        <OptionsGrid options={q.options} selected={selected} onPick={onPick} locked={locked} checked={checked} colors={colors} />
       </View>
     );
   }
@@ -181,22 +265,33 @@ function QuestionBody({
         <Text style={s.question}>{q.question}</Text>
         <View style={s.reversedRow}>
           {q.options.map((opt, i) => {
-            const isSel = selected === i;
+            const variant = optionVariant(i, selected, checked);
+            const isSel = variant === "selected";
             return (
               <TouchableOpacity
                 key={i}
                 onPress={() => onPick(i)}
                 disabled={locked}
                 activeOpacity={0.85}
-                style={[s.reversedTile, isSel && s.reversedTileActive]}
+                style={[
+                  s.reversedTile,
+                  isSel && s.reversedTileActive,
+                  variant === "correct" && s.tileCorrect,
+                  variant === "wrong" && s.tileWrong,
+                ]}
                 testID={`quiz-option-${i}`}
               >
                 <Ionicons
                   name={i === 0 ? "arrow-up" : "arrow-down"}
                   size={36}
-                  color={isSel ? colors.gold : colors.textSecondary}
+                  color={variant === "correct" ? colors.green : variant === "wrong" ? colors.crimson : isSel ? colors.gold : colors.textSecondary}
                 />
-                <Text style={[s.reversedText, isSel && { color: colors.gold, fontWeight: "700" }]}>
+                <Text style={[
+                  s.reversedText,
+                  isSel && { color: colors.gold, fontWeight: "700" },
+                  variant === "correct" && { color: colors.green, fontWeight: "700" },
+                  variant === "wrong" && { color: colors.crimson, fontWeight: "700" },
+                ]}>
                   {opt}
                 </Text>
               </TouchableOpacity>
@@ -213,17 +308,30 @@ function QuestionBody({
         <Text style={s.question}>{q.question}</Text>
         <View style={s.keywordWrap}>
           {q.options.map((opt, i) => {
-            const isSel = selected === i;
+            const variant = optionVariant(i, selected, checked);
+            const isSel = variant === "selected";
             return (
               <TouchableOpacity
                 key={i}
                 onPress={() => onPick(i)}
                 disabled={locked}
                 activeOpacity={0.85}
-                style={[s.keywordPill, isSel && s.keywordPillActive]}
+                style={[
+                  s.keywordPill,
+                  isSel && s.keywordPillActive,
+                  variant === "correct" && s.pillCorrect,
+                  variant === "wrong" && s.pillWrong,
+                ]}
                 testID={`quiz-option-${i}`}
               >
-                <Text style={[s.keywordText, isSel && s.keywordTextActive]}>{opt}</Text>
+                <Text style={[
+                  s.keywordText,
+                  isSel && s.keywordTextActive,
+                  variant === "correct" && { color: colors.bg, fontWeight: "700" },
+                  variant === "wrong" && { color: colors.bg, fontWeight: "700" },
+                ]}>
+                  {opt}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -238,20 +346,44 @@ function QuestionBody({
       <Text style={s.question}>{q.question}</Text>
       <View style={s.options}>
         {q.options.map((opt, i) => {
-          const isSel = selected === i;
+          const variant = optionVariant(i, selected, checked);
+          const isSel = variant === "selected";
           return (
             <TouchableOpacity
               key={i}
               onPress={() => onPick(i)}
               disabled={locked}
               activeOpacity={0.85}
-              style={[s.option, isSel && s.optionSelected]}
+              style={[
+                s.option,
+                isSel && s.optionSelected,
+                variant === "correct" && s.optionCorrect,
+                variant === "wrong" && s.optionWrong,
+              ]}
               testID={`quiz-option-${i}`}
             >
-              <View style={[s.optionBullet, isSel && s.optionBulletActive]}>
-                {isSel ? <Ionicons name="checkmark" size={14} color={colors.bg} /> : null}
+              <View style={[
+                s.optionBullet,
+                isSel && s.optionBulletActive,
+                variant === "correct" && { backgroundColor: colors.green, borderColor: colors.green },
+                variant === "wrong" && { backgroundColor: colors.crimson, borderColor: colors.crimson },
+              ]}>
+                {(isSel || variant === "correct" || variant === "wrong") ? (
+                  <Ionicons
+                    name={variant === "correct" ? "checkmark" : variant === "wrong" ? "close" : "checkmark"}
+                    size={14}
+                    color={colors.bg}
+                  />
+                ) : null}
               </View>
-              <Text style={[s.optionText, isSel && s.optionTextSelected]}>{opt}</Text>
+              <Text style={[
+                s.optionText,
+                isSel && s.optionTextSelected,
+                variant === "correct" && { color: colors.green, fontWeight: "600" },
+                variant === "wrong" && { color: colors.crimson, fontWeight: "600" },
+              ]}>
+                {opt}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -261,23 +393,36 @@ function QuestionBody({
 }
 
 function OptionsGrid({
-  options, selected, onPick, locked, colors,
-}: { options: string[]; selected: number | null; onPick: (i: number) => void; locked: boolean; colors: any }) {
+  options, selected, onPick, locked, checked, colors,
+}: { options: string[]; selected: number | null; onPick: (i: number) => void; locked: boolean; checked: CheckedState; colors: any }) {
   const s = styles(colors);
   return (
     <View style={s.gridWrap}>
       {options.map((opt, i) => {
-        const isSel = selected === i;
+        const variant = optionVariant(i, selected, checked);
+        const isSel = variant === "selected";
         return (
           <TouchableOpacity
             key={i}
             onPress={() => onPick(i)}
             disabled={locked}
             activeOpacity={0.85}
-            style={[s.gridTile, isSel && s.gridTileActive]}
+            style={[
+              s.gridTile,
+              isSel && s.gridTileActive,
+              variant === "correct" && s.tileCorrect,
+              variant === "wrong" && s.tileWrong,
+            ]}
             testID={`quiz-option-${i}`}
           >
-            <Text style={[s.gridTileText, isSel && s.gridTileTextActive]}>{opt}</Text>
+            <Text style={[
+              s.gridTileText,
+              isSel && s.gridTileTextActive,
+              variant === "correct" && { color: colors.green, fontWeight: "700" },
+              variant === "wrong" && { color: colors.crimson, fontWeight: "700" },
+            ]}>
+              {opt}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -433,7 +578,19 @@ const styles = (c: any) =>
     heartsBox: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8 },
     heartsText: { color: c.crimson, fontWeight: "700", fontSize: 14 },
     scroll: { padding: 24, gap: 18, paddingBottom: 120 },
+    qNumberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     qNumber: { color: c.gold, fontSize: 11, letterSpacing: 3, textTransform: "uppercase" },
+    hintBtn: {
+      flexDirection: "row", alignItems: "center", gap: 4,
+      paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
+      borderWidth: 1, borderColor: c.gold,
+    },
+    hintBtnText: { color: c.gold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", fontWeight: "700" },
+    hintBox: {
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.borderSoft,
+      borderRadius: 12, padding: 12, marginTop: -8,
+    },
+    hintText: { color: c.textSecondary, fontSize: 13, lineHeight: 19, fontStyle: "italic" },
     question: {
       color: c.textPrimary, fontFamily: fonts.serif, fontSize: 24, lineHeight: 32, letterSpacing: 0.3,
     },
@@ -444,6 +601,8 @@ const styles = (c: any) =>
       borderWidth: 2, borderColor: c.borderSoft,
     },
     optionSelected: { borderColor: c.gold, backgroundColor: c.surface2 },
+    optionCorrect: { borderColor: c.green, backgroundColor: c.surface2 },
+    optionWrong: { borderColor: c.crimson, backgroundColor: c.surface2 },
     optionBullet: {
       width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: c.borderSoft,
       alignItems: "center", justifyContent: "center",
@@ -451,6 +610,19 @@ const styles = (c: any) =>
     optionBulletActive: { backgroundColor: c.gold, borderColor: c.gold },
     optionText: { color: c.textPrimary, fontSize: 15, flex: 1 },
     optionTextSelected: { color: c.gold, fontWeight: "600" },
+
+    feedbackBox: { borderRadius: 14, padding: 14, borderWidth: 1, gap: 6 },
+    feedbackCorrect: { backgroundColor: `${c.green}1A`, borderColor: c.green },
+    feedbackWrong: { backgroundColor: `${c.crimson}1A`, borderColor: c.crimson },
+    feedbackHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+    feedbackTitle: { fontFamily: fonts.display, fontSize: 13, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: "700" },
+    feedbackExplanation: { color: c.textPrimary, fontSize: 14, lineHeight: 20 },
+
+    retryBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+      paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: c.gold,
+    },
+    retryText: { color: c.gold, fontSize: 13, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
 
     imageWrap: {
       alignSelf: "center", width: 220, aspectRatio: 0.58, borderRadius: 14,
@@ -468,6 +640,8 @@ const styles = (c: any) =>
     gridTileActive: { borderColor: c.gold, backgroundColor: c.surface2 },
     gridTileText: { color: c.textPrimary, fontSize: 14, textAlign: "center" },
     gridTileTextActive: { color: c.gold, fontWeight: "700" },
+    tileCorrect: { borderColor: c.green, backgroundColor: c.surface2 },
+    tileWrong: { borderColor: c.crimson, backgroundColor: c.surface2 },
 
     reversedRow: { flexDirection: "row", gap: 14 },
     reversedTile: {
@@ -485,6 +659,8 @@ const styles = (c: any) =>
     keywordPillActive: { borderColor: c.gold, backgroundColor: c.gold },
     keywordText: { color: c.textPrimary, fontSize: 14, letterSpacing: 1, textTransform: "uppercase" },
     keywordTextActive: { color: c.bg, fontWeight: "700" },
+    pillCorrect: { borderColor: c.green, backgroundColor: c.green },
+    pillWrong: { borderColor: c.crimson, backgroundColor: c.crimson },
 
     footer: { padding: 20, gap: 10 },
     cta: { backgroundColor: c.gold, paddingVertical: 16, borderRadius: 999, alignItems: "center" },

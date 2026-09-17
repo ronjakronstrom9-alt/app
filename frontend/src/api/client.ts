@@ -94,6 +94,12 @@ export const api = {
       answers,
       hearts_lost: heartsLost,
     }),
+  checkQuizAnswer: (lessonId: string, questionId: string, answerIndex: number) =>
+    request<{ correct: boolean; correct_index: number; explanation: string }>(
+      "POST",
+      "/quizzes/check",
+      { lesson_id: lessonId, question_id: questionId, answer_index: answerIndex },
+    ),
   refillHearts: () => request<{ hearts: number }>("POST", "/users/refill-hearts"),
   progress: () => request<Progress>("GET", "/users/progress"),
   toggleFavorite: (cardId: string) =>
@@ -207,6 +213,7 @@ export type QuizQuestion = {
   options: string[];
   question_type?: "mcq" | "match_image" | "match_meaning" | "reversed_detect" | "keyword_pick";
   image_url?: string | null;
+  hint?: string | null;
 };
 
 export type Achievement = {
