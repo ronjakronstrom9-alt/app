@@ -1147,7 +1147,9 @@ async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_use
     total_combos = await db.combos.count_documents({})
     _, shuffled_correct_index = _shuffled_combo_options(combo, user['id'])
     correct = req.answer_index == shuffled_correct_index
-    xp_earned = 15 if correct else 0
+    # More cards in the spread = harder to interpret together, so it's worth more.
+    xp_by_difficulty = {1: 15, 2: 20, 3: 25}
+    xp_earned = xp_by_difficulty.get(combo.get('difficulty', 1), 15) if correct else 0
 
     stats = dict(user.get('combo_stats', {}))
     s = dict(stats.get(req.combo_id, {"wrong": 0, "correct": 0}))

@@ -8,14 +8,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
 import { api, Card, Lesson, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
+import { useAuth } from "@/src/context/auth";
 
 export default function LessonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [card, setCard] = useState<Card | null>(null);
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Beginner mode holds the reversed meaning behind a tap — reversed isn't
+  // "bad", just a later layer, and it's still one tap away, not hidden.
+  const [revealedReversed, setRevealedReversed] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -115,6 +120,21 @@ export default function LessonScreen() {
                     </>
                   );
                 })()
+              ) : section!.heading === "Reversed Meaning" && user?.learning_mode !== "advanced" && !revealedReversed ? (
+                <View style={styles.reversedGate}>
+                  <Ionicons name="swap-vertical" size={28} color={colors.gold} />
+                  <Text style={styles.reversedGateText}>
+                    Cards can also be read reversed (upside-down). That doesn't automatically mean something bad — it's just a different angle, usually blocked, delayed, or more internal.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setRevealedReversed(true)}
+                    style={styles.reversedGateBtn}
+                    testID="lesson-reveal-reversed"
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.reversedGateBtnText}>Show {card.name}'s reversed meaning</Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
                 <Text style={styles.sectionBody}>{section!.body}</Text>
               )}
@@ -214,6 +234,13 @@ const styles = StyleSheet.create({
   sectionHeading: { color: colors.textPrimary, fontFamily: fonts.serif, fontSize: 28, lineHeight: 34, letterSpacing: 0.3 },
   divider: { height: 1, backgroundColor: colors.border, width: 60, marginVertical: 6 },
   sectionBody: { color: colors.textPrimary, fontFamily: fonts.body, fontSize: 16, lineHeight: 26, letterSpacing: 0.2 },
+  reversedGate: {
+    alignItems: "center", gap: 12, padding: 20, marginTop: 4,
+    backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.borderSoft,
+  },
+  reversedGateText: { color: colors.textSecondary, fontSize: 15, lineHeight: 22, textAlign: "center" },
+  reversedGateBtn: { backgroundColor: colors.gold, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 },
+  reversedGateBtnText: { color: colors.bg, fontWeight: "700", fontSize: 13, letterSpacing: 0.5, textAlign: "center" },
   footer: { padding: 20 },
   cta: { backgroundColor: colors.gold, paddingVertical: 16, borderRadius: 999, alignItems: "center" },
   ctaText: { color: colors.bg, fontWeight: "700", fontSize: 16, letterSpacing: 0.5 },
