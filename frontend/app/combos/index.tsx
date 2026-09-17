@@ -229,11 +229,13 @@ export default function CardCombosScreen() {
 function CardSpread({ cards, colors }: { cards: ComboQuestion["cards"]; colors: any }) {
   const s = styles(colors);
   const mid = (cards.length - 1) / 2;
+  // 3-4 card combos need smaller tiles and a tighter fan to stay on screen.
+  const compact = cards.length >= 4;
   return (
     <View style={s.spreadRow}>
       <SpreadGlow colors={colors} />
       {cards.map((c, i) => (
-        <SpreadCard key={c.id} card={c} rotate={(i - mid) * 7} index={i} colors={colors} />
+        <SpreadCard key={c.id} card={c} rotate={(i - mid) * (compact ? 5 : 7)} index={i} colors={colors} compact={compact} />
       ))}
     </View>
   );
@@ -266,8 +268,8 @@ function SpreadGlow({ colors }: { colors: any }) {
 }
 
 function SpreadCard({
-  card, rotate, index, colors,
-}: { card: { name: string; image_url: string }; rotate: number; index: number; colors: any }) {
+  card, rotate, index, colors, compact,
+}: { card: { name: string; image_url: string }; rotate: number; index: number; colors: any; compact?: boolean }) {
   const s = styles(colors);
   const enter = useSharedValue(0);
   useEffect(() => {
@@ -285,9 +287,13 @@ function SpreadCard({
     ],
   }));
   return (
-    <Animated.View style={[s.spreadCardWrap, style]}>
-      <Image source={{ uri: imageUri(card.image_url) }} style={s.spreadCardImg} resizeMode="cover" />
-      <Text style={s.spreadCardName} numberOfLines={1}>{card.name}</Text>
+    <Animated.View style={[s.spreadCardWrap, compact && { marginHorizontal: -10 }, style]}>
+      <Image
+        source={{ uri: imageUri(card.image_url) }}
+        style={[s.spreadCardImg, compact && { width: 72 }]}
+        resizeMode="cover"
+      />
+      <Text style={[s.spreadCardName, compact && { fontSize: 9, maxWidth: 72 }]} numberOfLines={1}>{card.name}</Text>
     </Animated.View>
   );
 }
