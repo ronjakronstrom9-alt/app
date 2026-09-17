@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,13 +6,15 @@ import { useRouter } from "expo-router";
 import { colors, fonts, useTheme } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import { StarBg } from "@/src/components/StarBg";
+import { api } from "@/src/api/client";
 
 const TITLES = ["Seeker", "Acolyte", "Initiate", "Adept", "Mystic", "Oracle", "Sage", "Visionary", "Magus", "Arcanum"];
 
 export default function Profile() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refresh } = useAuth();
   const router = useRouter();
   const { mode, toggle } = useTheme();
+  const [savingMode, setSavingMode] = useState(false);
   if (!user) return null;
 
   const title = TITLES[Math.min(user.level - 1, TITLES.length - 1)];
@@ -20,6 +22,17 @@ export default function Profile() {
   const logout = async () => {
     await signOut();
     router.replace("/(auth)/welcome");
+  };
+
+  const setLearningMode = async (m: "beginner" | "advanced") => {
+    if (m === user.learning_mode || savingMode) return;
+    setSavingMode(true);
+    try {
+      await api.setLearningMode(m);
+      await refresh();
+    } finally {
+      setSavingMode(false);
+    }
   };
 
   return (
@@ -65,6 +78,33 @@ export default function Profile() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Learning</Text>
+            <Text style={styles.rowValue}>
+              {user.learning_mode === "advanced"
+                ? "Advanced — full interpretations shown right away."
+                : "Beginner — short meanings first, with more available on tap."}
+            </Text>
+            <View style={styles.modeToggle}>
+              <TouchableOpacity
+                onPress={() => setLearningMode("beginner")}
+                style={[styles.modeBtn, user.learning_mode === "beginner" && styles.modeBtnActive]}
+                testID="mode-beginner-btn"
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modeBtnText, user.learning_mode === "beginner" && styles.modeBtnTextActive]}>Beginner</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setLearningMode("advanced")}
+                style={[styles.modeBtn, user.learning_mode === "advanced" && styles.modeBtnActive]}
+                testID="mode-advanced-btn"
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modeBtnText, user.learning_mode === "advanced" && styles.modeBtnTextActive]}>Advanced</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -134,6 +174,14 @@ const styles = StyleSheet.create({
   smallStatLabel: { color: colors.textSecondary, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
   section: { backgroundColor: colors.surface, borderRadius: 18, padding: 16, gap: 14, borderWidth: 1, borderColor: colors.borderSoft },
   themeRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  modeToggle: {
+    flexDirection: "row", backgroundColor: colors.bg2, borderRadius: 999,
+    padding: 4, borderWidth: 1, borderColor: colors.borderSoft,
+  },
+  modeBtn: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 999 },
+  modeBtnActive: { backgroundColor: colors.gold },
+  modeBtnText: { color: colors.textSecondary, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", fontWeight: "700" },
+  modeBtnTextActive: { color: colors.bg },
   sectionTitle: { color: colors.gold, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
   row: { flexDirection: "row", alignItems: "center", gap: 14 },
   rowLabel: { color: colors.textSecondary, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },

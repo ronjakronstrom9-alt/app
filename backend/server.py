@@ -65,6 +65,7 @@ class UserOut(BaseModel):
     last_active_date: Optional[str] = None
     completed_lessons: List[str] = []
     favorites: List[str] = []
+    learning_mode: str = "beginner"  # "beginner" | "advanced" — controls default depth on card pages
     created_at: str
 
 class AuthResponse(BaseModel):
@@ -201,6 +202,7 @@ def user_to_out(user: dict) -> UserOut:
         last_active_date=user.get('last_active_date'),
         completed_lessons=user.get('completed_lessons', []),
         favorites=user.get('favorites', []),
+        learning_mode=user.get('learning_mode', 'beginner'),
         created_at=user.get('created_at', ''),
     )
 
@@ -228,6 +230,7 @@ async def signup(req: SignupReq):
         "password_hash": hash_password(req.password),
         "xp": 0, "level": 1, "hearts": 5, "streak": 0,
         "last_active_date": None, "completed_lessons": [],
+        "learning_mode": "beginner",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(user_doc)
@@ -246,6 +249,19 @@ async def login(req: LoginReq):
 
 @api_router.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(get_current_user)):
+    return user_to_out(user)
+
+
+class LearningModeReq(BaseModel):
+    mode: str  # "beginner" | "advanced"
+
+
+@api_router.post("/users/learning-mode", response_model=UserOut)
+async def set_learning_mode(req: LearningModeReq, user: dict = Depends(get_current_user)):
+    if req.mode not in ("beginner", "advanced"):
+        raise HTTPException(status_code=400, detail="mode must be 'beginner' or 'advanced'")
+    await db.users.update_one({"id": user['id']}, {"$set": {"learning_mode": req.mode}})
+    user['learning_mode'] = req.mode
     return user_to_out(user)
 
 

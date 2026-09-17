@@ -36,7 +36,9 @@ export default function CardDetail() {
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(true);
-  const [deeper, setDeeper] = useState(false);
+  // Advanced-mode learners see the full interpretation right away;
+  // Beginner mode (the default) starts collapsed behind "Go deeper".
+  const [deeper, setDeeper] = useState(user?.learning_mode === "advanced");
 
   // Opened from "Card of the Day" / the Journal calendar: the note editor
   // below becomes that day's reflection, so it's the exact same text shown

@@ -101,6 +101,8 @@ export const api = {
       { lesson_id: lessonId, question_id: questionId, answer_index: answerIndex },
     ),
   refillHearts: () => request<{ hearts: number }>("POST", "/users/refill-hearts"),
+  setLearningMode: (mode: "beginner" | "advanced") =>
+    request<User>("POST", "/users/learning-mode", { mode }),
   progress: () => request<Progress>("GET", "/users/progress"),
   toggleFavorite: (cardId: string) =>
     request<{ favorited: boolean; favorites: string[] }>("POST", "/favorites/toggle", { card_id: cardId }),
@@ -174,6 +176,7 @@ export type User = {
   last_active_date: string | null;
   completed_lessons: string[];
   favorites: string[];
+  learning_mode: "beginner" | "advanced";
   created_at: string;
 };
 

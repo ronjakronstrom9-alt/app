@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from "react-native-reanimated";
 import { colors, fonts } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
 import { api, Card, Lesson, imageUri, invalidateStaticCache } from "@/src/api/client";
@@ -96,6 +97,17 @@ export default function Home() {
             }
             testID="home-scroll"
           >
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => router.push("/daily-history")}
+              style={styles.nudgeBanner}
+              testID="daily-nudge-banner"
+            >
+              <Ionicons name="sparkles" size={16} color={colors.gold} />
+              <Text style={styles.nudgeText}>Your card of the day is ready</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.gold} />
+            </TouchableOpacity>
+
             <DailyCardWidget />
 
             <TouchableOpacity
@@ -123,6 +135,7 @@ export default function Home() {
                 const isCurrent = !isCompleted && prevCompleted;
                 const isLocked = !isCompleted && !isCurrent;
                 const align = idx % 2 === 0 ? "flex-start" : "flex-end";
+                const showStartHere = idx === 0 && isCurrent && completed.size === 0;
 
                 return (
                   <View key={lesson.id} style={[styles.nodeRow, { alignItems: "center", justifyContent: align as any }]}>
@@ -139,37 +152,45 @@ export default function Home() {
                         ]}
                       />
                     )}
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      disabled={isLocked}
-                      onPress={() => router.push(`/lesson/${lesson.id}`)}
-                      style={[
-                        styles.node,
-                        isCompleted && styles.nodeCompleted,
-                        isCurrent && styles.nodeCurrent,
-                        isLocked && styles.nodeLocked,
-                      ]}
-                      testID={`lesson-node-${idx}`}
-                    >
-                      {card?.image_url ? (
-                        <Image
-                          source={{ uri: imageUri(card.image_url) }}
-                          style={styles.nodeImage}
-                        />
-                      ) : (
-                        <Text style={styles.nodeEmoji}>🃏</Text>
-                      )}
-                      {isCompleted && (
-                        <View style={styles.checkBadge}>
-                          <Ionicons name="checkmark" size={14} color={colors.bg} />
+                    <View style={{ position: "relative" }}>
+                      {showStartHere && (
+                        <View style={styles.startHereBadge} pointerEvents="none">
+                          <Text style={styles.startHereText}>Start here</Text>
                         </View>
                       )}
-                      {isLocked && (
-                        <View style={styles.lockBadge}>
-                          <Ionicons name="lock-closed" size={12} color={colors.textSecondary} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                      {showStartHere && <StartHereGlow />}
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        disabled={isLocked}
+                        onPress={() => router.push(`/lesson/${lesson.id}`)}
+                        style={[
+                          styles.node,
+                          isCompleted && styles.nodeCompleted,
+                          isCurrent && styles.nodeCurrent,
+                          isLocked && styles.nodeLocked,
+                        ]}
+                        testID={`lesson-node-${idx}`}
+                      >
+                        {card?.image_url ? (
+                          <Image
+                            source={{ uri: imageUri(card.image_url) }}
+                            style={styles.nodeImage}
+                          />
+                        ) : (
+                          <Text style={styles.nodeEmoji}>🃏</Text>
+                        )}
+                        {isCompleted && (
+                          <View style={styles.checkBadge}>
+                            <Ionicons name="checkmark" size={14} color={colors.bg} />
+                          </View>
+                        )}
+                        {isLocked && (
+                          <View style={styles.lockBadge}>
+                            <Ionicons name="lock-closed" size={12} color={colors.textSecondary} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                     <View style={[styles.nodeLabel, { alignItems: align as any }]}>
                       <Text style={[styles.nodeLabelTitle, isLocked && { color: colors.textMuted }]} numberOfLines={1}>
                         {card?.name || "Lesson"}
@@ -187,6 +208,22 @@ export default function Home() {
       </SafeAreaView>
     </View>
   );
+}
+
+function StartHereGlow() {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, []);
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: 0.35 + pulse.value * 0.4,
+    transform: [{ scale: 1 + pulse.value * 0.08 }],
+  }));
+  return <Animated.View style={[styles.startHereGlow, glowStyle]} pointerEvents="none" />;
 }
 
 function Stat({ icon, value, color, testID }: any) {
@@ -219,6 +256,12 @@ const styles = StyleSheet.create({
   barTrack: { height: 6, backgroundColor: colors.surface, borderRadius: 999, overflow: "hidden" },
   barFill: { height: "100%", backgroundColor: colors.gold, borderRadius: 999 },
   scroll: { padding: 20, paddingBottom: 60 },
+  nudgeBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.gold,
+    borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 12,
+  },
+  nudgeText: { flex: 1, color: colors.gold, fontFamily: fonts.display, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase" },
   combosCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
     marginBottom: 12, padding: 16, borderRadius: 18,
@@ -246,6 +289,20 @@ const styles = StyleSheet.create({
   nodeCompleted: { borderColor: colors.goldGlow },
   nodeCurrent: { borderColor: colors.gold, backgroundColor: colors.surface2 },
   nodeLocked: { backgroundColor: colors.surface2, borderColor: colors.violet, opacity: 0.7 },
+  startHereGlow: {
+    position: "absolute", top: -6, bottom: -6, left: 18, right: 18,
+    borderRadius: 20, backgroundColor: colors.gold,
+  },
+  startHereBadge: {
+    position: "absolute", top: -30, left: 0, right: 0,
+    alignItems: "center", zIndex: 2,
+  },
+  startHereText: {
+    backgroundColor: colors.gold, color: colors.bg,
+    fontFamily: fonts.display, fontSize: 10, fontWeight: "700",
+    letterSpacing: 1.5, textTransform: "uppercase",
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: "hidden",
+  },
   nodeImage: { width: "100%", height: "100%" },
   nodeEmoji: { fontSize: 38 },
   checkBadge: {
