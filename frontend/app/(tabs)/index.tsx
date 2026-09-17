@@ -125,7 +125,28 @@ export default function Home() {
             </TouchableOpacity>
 
             <Text style={styles.sectionTitle}>Your Path</Text>
-            <Text style={styles.sectionSub}>Walk the road of the Major Arcana</Text>
+            {(() => {
+              const total = lessons.length;
+              const done = completed.size;
+              const nextLesson = lessons.find((l, idx) => !completed.has(l.id) && (idx === 0 || completed.has(lessons[idx - 1]?.id)));
+              const nextCard = nextLesson ? cards[nextLesson.card_id] : null;
+              return (
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={[styles.sectionSub, { marginBottom: 8 }]}>
+                    {done >= total && total > 0
+                      ? "You've walked the whole Major Arcana"
+                      : nextCard
+                        ? `${done} of ${total} mastered · Next: ${nextCard.name}`
+                        : `${done} of ${total} mastered`}
+                  </Text>
+                  {total > 0 && (
+                    <View style={styles.pathProgressTrack}>
+                      <View style={[styles.pathProgressFill, { width: `${Math.min(100, (done / total) * 100)}%` }]} />
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
 
             <View style={styles.path}>
               {lessons.map((lesson, idx) => {
@@ -272,6 +293,8 @@ const styles = StyleSheet.create({
   combosSub: { color: colors.textSecondary, fontSize: 12, marginTop: 3 },
   sectionTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 26, marginTop: 8 },
   sectionSub: { color: colors.textSecondary, fontSize: 14, marginBottom: 24 },
+  pathProgressTrack: { height: 6, backgroundColor: colors.surface, borderRadius: 999, overflow: "hidden" },
+  pathProgressFill: { height: "100%", backgroundColor: colors.gold, borderRadius: 999 },
   path: { gap: 32, paddingVertical: 8 },
   nodeRow: { flexDirection: "row", gap: 14, position: "relative", width: "100%" },
   connector: {
