@@ -9,6 +9,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "@/src/theme";
 import { api, Card, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
+import { InfoButton } from "@/src/components/GlossaryModal";
+import { useAuth } from "@/src/context/auth";
 
 function toRoman(n: number): string {
   if (n === 0) return "0";
@@ -32,6 +34,8 @@ const FILTERS: { key: FilterKey; label: string; icon: any }[] = [
 
 export default function Library() {
   const router = useRouter();
+  const { user } = useAuth();
+  const knownIds = useMemo(() => new Set(user?.known_cards || []), [user?.known_cards]);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -73,7 +77,10 @@ export default function Library() {
             <Ionicons name="chevron-back" size={26} color={colors.gold} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.kicker}>The Library</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={styles.kicker}>The Library</Text>
+              <InfoButton highlight="Major Arcana" />
+            </View>
             <Text style={styles.title} testID="library-title">Tarot Cards</Text>
             <Text style={styles.sub}>
               {loading ? "Loading the deck…" : `${filtered.length} of ${cards.length} · ${activeFilterLabel}`}
@@ -166,6 +173,11 @@ export default function Library() {
               >
                 <View style={styles.imageWrap}>
                   <Image source={{ uri: imageUri(item.image_url) }} style={styles.cardImage} resizeMode="cover" />
+                  {knownIds.has(item.id) && (
+                    <View style={styles.knownBadge} pointerEvents="none">
+                      <Ionicons name="checkmark" size={11} color={colors.bg} />
+                    </View>
+                  )}
                   <View style={styles.overlay} pointerEvents="none">
                     <Text
                       style={styles.overlayName}
@@ -243,6 +255,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, overflow: "hidden",
   },
   imageWrap: { position: "relative", width: "100%", aspectRatio: 0.58, backgroundColor: colors.surface2 },
+  knownBadge: {
+    position: "absolute", top: 6, right: 6, zIndex: 1,
+    width: 20, height: 20, borderRadius: 10, backgroundColor: colors.green,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, borderColor: colors.bg,
+  },
   cardImage: { width: "100%", height: "100%" },
   overlay: {
     position: "absolute", left: 0, right: 0, bottom: 0,

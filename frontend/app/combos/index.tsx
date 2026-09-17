@@ -13,6 +13,7 @@ import { api, ComboQuestion, ComboAnswerResult, imageUri } from "@/src/api/clien
 import { useAuth } from "@/src/context/auth";
 import { StarBg } from "@/src/components/StarBg";
 import { XpCelebration, AnimatedNumber } from "@/src/components/XpCelebration";
+import { InfoButton } from "@/src/components/GlossaryModal";
 
 const CONTEXT_LABEL: Record<string, string> = {
   love: "Love",
@@ -106,7 +107,10 @@ export default function CardCombosScreen() {
             <Ionicons name="close" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={s.headerTitle}>Card Combinations</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={s.headerTitle}>Card Combinations</Text>
+              <InfoButton highlight="Card Combinations" />
+            </View>
             <Text style={s.headerSub}>{combo.combos_unlocked} / {combo.combos_total} unlocked</Text>
           </View>
           <View style={s.xpBox}>

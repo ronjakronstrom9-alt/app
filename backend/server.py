@@ -65,6 +65,7 @@ class UserOut(BaseModel):
     last_active_date: Optional[str] = None
     completed_lessons: List[str] = []
     favorites: List[str] = []
+    known_cards: List[str] = []
     learning_mode: str = "beginner"  # "beginner" | "advanced" — controls default depth on card pages
     created_at: str
 
@@ -202,6 +203,7 @@ def user_to_out(user: dict) -> UserOut:
         last_active_date=user.get('last_active_date'),
         completed_lessons=user.get('completed_lessons', []),
         favorites=user.get('favorites', []),
+        known_cards=user.get('known_cards', []),
         learning_mode=user.get('learning_mode', 'beginner'),
         created_at=user.get('created_at', ''),
     )
@@ -975,6 +977,21 @@ async def toggle_favorite(req: FavoriteReq, user: dict = Depends(get_current_use
         favorites.append(req.card_id)
     await db.users.update_one({"id": user['id']}, {"$set": {"favorites": favorites}})
     return {"favorited": not is_fav, "favorites": favorites}
+
+@api_router.post("/cards/known/toggle")
+async def toggle_known_card(req: FavoriteReq, user: dict = Depends(get_current_user)):
+    """Lets a learner mark a card as 'I know this card' — a personal
+    checklist entry, independent of lesson completion, that the app can use
+    later to suggest what to study next."""
+    known = list(user.get('known_cards', []))
+    is_known = req.card_id in known
+    if is_known:
+        known.remove(req.card_id)
+    else:
+        known.append(req.card_id)
+    await db.users.update_one({"id": user['id']}, {"$set": {"known_cards": known}})
+    return {"known": not is_known, "known_cards": known}
+
 
 @api_router.get("/favorites", response_model=List[TarotCard])
 async def list_favorites(user: dict = Depends(get_current_user)):

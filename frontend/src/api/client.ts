@@ -107,6 +107,8 @@ export const api = {
   toggleFavorite: (cardId: string) =>
     request<{ favorited: boolean; favorites: string[] }>("POST", "/favorites/toggle", { card_id: cardId }),
   listFavorites: () => request<Card[]>("GET", "/favorites"),
+  toggleKnown: (cardId: string) =>
+    request<{ known: boolean; known_cards: string[] }>("POST", "/cards/known/toggle", { card_id: cardId }),
   dailyCard: () => request<{ date: string; card: Card; prompt: string }>("GET", "/daily-card"),
   getNote: (cardId: string) => request<{ card_id: string; text: string }>("GET", `/notes/${cardId}`),
   saveNote: (cardId: string, text: string) =>
@@ -176,6 +178,7 @@ export type User = {
   last_active_date: string | null;
   completed_lessons: string[];
   favorites: string[];
+  known_cards: string[];
   learning_mode: "beginner" | "advanced";
   created_at: string;
 };

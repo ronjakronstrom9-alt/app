@@ -16,6 +16,7 @@ import { colors, fonts } from "@/src/theme";
 import { api, Card, imageUri } from "@/src/api/client";
 import { StarBg } from "@/src/components/StarBg";
 import { useAuth } from "@/src/context/auth";
+import { InfoButton } from "@/src/components/GlossaryModal";
 
 function toRoman(n: number): string {
   if (n === 0) return "0";
@@ -46,6 +47,8 @@ export default function CardDetail() {
   const isDailyMode = !!date;
 
   const isFav = !!user && !!card && user.favorites?.includes(card.id);
+  const isKnown = !!user && !!card && user.known_cards?.includes(card.id);
+  const [favToast, setFavToast] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -65,7 +68,18 @@ export default function CardDetail() {
 
   const toggleFav = async () => {
     if (!card) return;
+    const wasFav = isFav;
     await api.toggleFavorite(card.id);
+    await refresh();
+    if (!wasFav) {
+      setFavToast(true);
+      setTimeout(() => setFavToast(false), 1800);
+    }
+  };
+
+  const toggleKnown = async () => {
+    if (!card) return;
+    await api.toggleKnown(card.id);
     await refresh();
   };
 
@@ -109,6 +123,13 @@ export default function CardDetail() {
           </TouchableOpacity>
         </View>
 
+        {favToast && (
+          <View style={styles.favToast} pointerEvents="none" testID="card-fav-toast">
+            <Ionicons name="heart" size={14} color={colors.crimson} />
+            <Text style={styles.favToastText}>Added to Favorites</Text>
+          </View>
+        )}
+
         <ScrollView contentContainerStyle={styles.scroll}>
           <FlipCard
             imageUrl={card.image_url}
@@ -121,22 +142,37 @@ export default function CardDetail() {
             <Text style={styles.cardName}>{card.name.toUpperCase()}</Text>
           </View>
 
-          <View style={styles.toggle}>
-            <TouchableOpacity
-              onPress={() => { setReversed(false); setDeeper(false); }}
-              style={[styles.toggleBtn, !reversed && styles.toggleActive]}
-              testID="toggle-upright"
-            >
-              <Text style={[styles.toggleText, !reversed && styles.toggleTextActive]}>Upright</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => { setReversed(true); setDeeper(false); }}
-              style={[styles.toggleBtn, reversed && styles.toggleActive]}
-              testID="toggle-reversed"
-            >
-              <Text style={[styles.toggleText, reversed && styles.toggleTextActive]}>Reversed</Text>
-            </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "center" }}>
+            <View style={styles.toggle}>
+              <TouchableOpacity
+                onPress={() => { setReversed(false); setDeeper(false); }}
+                style={[styles.toggleBtn, !reversed && styles.toggleActive]}
+                testID="toggle-upright"
+              >
+                <Text style={[styles.toggleText, !reversed && styles.toggleTextActive]}>Upright</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setReversed(true); setDeeper(false); }}
+                style={[styles.toggleBtn, reversed && styles.toggleActive]}
+                testID="toggle-reversed"
+              >
+                <Text style={[styles.toggleText, reversed && styles.toggleTextActive]}>Reversed</Text>
+              </TouchableOpacity>
+            </View>
+            <InfoButton highlight={reversed ? "Reversed" : "Upright"} />
           </View>
+
+          <TouchableOpacity
+            onPress={toggleKnown}
+            style={[styles.knownBtn, isKnown && styles.knownBtnActive]}
+            testID="card-known-btn"
+            activeOpacity={0.85}
+          >
+            <Ionicons name={isKnown ? "checkmark-circle" : "checkmark-circle-outline"} size={16} color={isKnown ? colors.bg : colors.green} />
+            <Text style={[styles.knownBtnText, isKnown && { color: colors.bg }]}>
+              {isKnown ? "You know this card" : "I know this card"}
+            </Text>
+          </TouchableOpacity>
 
           <View style={styles.kwRow}>
             {kws.map((k) => (
@@ -359,6 +395,20 @@ const styles = StyleSheet.create({
   toggleActive: { backgroundColor: colors.gold },
   toggleText: { color: colors.textSecondary, fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase" },
   toggleTextActive: { color: colors.bg, fontWeight: "700" },
+  favToast: {
+    position: "absolute", top: 54, alignSelf: "center", zIndex: 10,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.crimson,
+    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8,
+  },
+  favToastText: { color: colors.textPrimary, fontSize: 12, fontWeight: "600" },
+  knownBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    alignSelf: "center", borderWidth: 1, borderColor: colors.green,
+    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, marginTop: 4,
+  },
+  knownBtnActive: { backgroundColor: colors.green },
+  knownBtnText: { color: colors.green, fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
   kwRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   kw: { borderWidth: 1, borderColor: colors.gold, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   kwText: { color: colors.gold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
