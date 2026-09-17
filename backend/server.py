@@ -2004,6 +2004,21 @@ def make_quiz_for_card(card: dict, lesson_id: str, other_cards: List[dict] = Non
     return {"id": str(uuid.uuid4()), "lesson_id": lesson_id, "questions": questions}
 
 
+async def backfill_quick_examples():
+    """Additive, non-destructive companion to seed_data: fills in the new
+    quick_meaning/example fields on cards that predate them, matched by
+    name. Unlike a full re-seed this never touches lessons, quizzes, or
+    user progress — safe to run on every startup, and a no-op once done."""
+    all_defs = list(SEED_CARDS) + build_seed_entries()
+    for c in all_defs:
+        if not c.get('quick_meaning'):
+            continue
+        await db.cards.update_one(
+            {"name": c['name'], "quick_meaning": {"$in": [None, ""]}},
+            {"$set": {"quick_meaning": c['quick_meaning'], "example": c.get('example')}},
+        )
+
+
 @app.on_event("startup")
 async def seed_data():
     # Extend WIKI_SOURCES with 56 Minor Arcana entries (name -> (url, filename))
@@ -2019,6 +2034,7 @@ async def seed_data():
         await _repoint_card_images()
         await db.meta.update_one({"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True)
         await seed_combos()
+        await backfill_quick_examples()
         return
     logger.info(f"Seed version {current} -> {SEED_VERSION}; re-seeding...")
     await db.cards.delete_many({})
