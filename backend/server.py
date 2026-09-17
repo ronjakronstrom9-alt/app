@@ -79,6 +79,8 @@ class TarotCard(BaseModel):
     suit: Optional[str] = None
     keywords_upright: List[str]
     keywords_reversed: List[str]
+    quick_meaning: Optional[str] = None
+    example: Optional[str] = None
     upright_meaning: str
     reversed_meaning: str
     description: str
@@ -813,6 +815,18 @@ def _combos_unlocked_count(total: int, mastered_count: int) -> int:
     return min(total, INITIAL_COMBO_UNLOCK + mastered_count)
 
 
+def _shuffled_combo_options(combo: dict, user_id: str):
+    """Shuffle a combo's answer options so the correct one isn't always in the
+    same slot, using a seed derived from (user_id, combo_id) so the exact same
+    order can be reproduced when the answer comes back in."""
+    order = list(range(len(combo['options'])))
+    seed = f"{user_id}:{combo['id']}"
+    random.Random(seed).shuffle(order)
+    shuffled_options = [combo['options'][i] for i in order]
+    shuffled_correct_index = order.index(combo['correct_index'])
+    return shuffled_options, shuffled_correct_index
+
+
 @api_router.get("/combos/next", response_model=ComboQuestionOut)
 async def next_combo(exclude: Optional[str] = None, user: dict = Depends(get_current_user)):
     combos = await db.combos.find({}, {"_id": 0}).sort("order", 1).to_list(200)
@@ -831,13 +845,15 @@ async def next_combo(exclude: Optional[str] = None, user: dict = Depends(get_cur
     cards_by_id = {c['id']: c for c in card_docs}
     ordered_cards = [cards_by_id[cid] for cid in combo['card_ids'] if cid in cards_by_id]
 
+    shuffled_options, _ = _shuffled_combo_options(combo, user['id'])
+
     return ComboQuestionOut(
         id=combo['id'],
         context=combo['context'],
         difficulty=combo.get('difficulty', 1),
         cards=[ComboCardOut(id=c['id'], name=c['name'], image_url=c['image_url']) for c in ordered_cards],
         question=combo['question'],
-        options=combo['options'],
+        options=shuffled_options,
         combos_unlocked=unlocked_count,
         combos_total=len(combos),
     )
@@ -850,7 +866,8 @@ async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Combo not found")
 
     total_combos = await db.combos.count_documents({})
-    correct = req.answer_index == combo['correct_index']
+    _, shuffled_correct_index = _shuffled_combo_options(combo, user['id'])
+    correct = req.answer_index == shuffled_correct_index
     xp_earned = 15 if correct else 0
 
     stats = dict(user.get('combo_stats', {}))
@@ -885,7 +902,7 @@ async def answer_combo(req: ComboAnswerReq, user: dict = Depends(get_current_use
 
     return ComboAnswerResult(
         correct=correct,
-        correct_index=combo['correct_index'],
+        correct_index=shuffled_correct_index,
         explanation=combo['explanation'],
         xp_earned=xp_earned,
         new_xp=new_xp,
@@ -985,6 +1002,18 @@ async def save_reflection(req: DailyReflectionReq, user: dict = Depends(get_curr
                   "reflection_updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     return {"ok": True}
+
+
+@api_router.get("/daily-history/entry")
+async def daily_history_entry(date: str, user: dict = Depends(get_current_user)):
+    """Return a single day's draw (card + reflection), so the card detail
+    screen can read/write the same reflection shown in the Journal."""
+    entry = await db.daily_history.find_one(
+        {"user_id": user['id'], "date": date}, {"_id": 0, "user_id": 0},
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="No draw recorded for that date")
+    return entry
 
 
 @api_router.get("/daily-history")
@@ -1189,6 +1218,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/9/90/RWS_Tarot_00_Fool.jpg",
         "keywords_upright": ["beginnings", "innocence", "spontaneity", "free spirit", "leap of faith", "adventure"],
         "keywords_reversed": ["recklessness", "naivety", "foolishness", "missed opportunity", "fear of change", "carelessness"],
+        "quick_meaning": "A fresh start — stepping into something new with an open mind, even without knowing exactly how it will go.",
+        "example": "Like saying yes to a new job or moving to a new city before you have every detail figured out, and trusting you'll learn as you go.",
         "upright_meaning": "The Fool represents pure, unwritten potential — the moment before action, when anything is still possible. Drawing this card invites you to begin with an open heart, trust the unknown, and take that first uncertain step. It is the energy of the eternal beginner: curious, weightless, and unafraid of looking ridiculous in pursuit of something new.",
         "reversed_meaning": "Reversed, the Fool warns that openness has tipped into recklessness. You may be ignoring real risks, refusing to plan, or repeating the same naive mistake. Alternatively, you might be so afraid of stumbling that you refuse to begin at all — paralyzed at the cliff's edge while the journey waits.",
         "description": "A youthful figure stands at the edge of a high cliff, gazing upward into the sun with a white rose in one hand and a slim travel satchel slung over the shoulder. A small white dog leaps beside them, both companion and warning. Behind them rise distant snow-capped mountains; below them, an unseen drop.",
@@ -1200,6 +1231,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/d/de/RWS_Tarot_01_Magician.jpg",
         "keywords_upright": ["manifestation", "willpower", "skill", "focus", "resourcefulness", "concentration", "action"],
         "keywords_reversed": ["manipulation", "untapped talent", "poor planning", "deception", "illusion", "scattered energy"],
+        "quick_meaning": "You already have everything you need to make something happen — now it's about focus and action.",
+        "example": "Like finally sitting down to start the project you've been planning for weeks, using skills and tools you already have.",
         "upright_meaning": "The Magician is the conscious creator — proof that you already possess everything you need to bring a vision into form. With one hand reaching toward heaven and the other pointing to earth, this card affirms 'as above, so below': your inner intention shapes outer reality. Use this moment to focus your will, gather your tools, and act with precision.",
         "reversed_meaning": "Reversed, the Magician suggests power misused or unrealized. Talents may lie dormant from self-doubt, or charisma may have curdled into manipulation and half-truths. Watch for plans that look bold but lack the discipline to execute, and beware of charmers (yourself included) selling illusions.",
         "description": "A robed figure stands at an altar with one arm raised, holding a double-pointed wand to the sky, while the other arm points toward the earth. On the altar before them lie the four suit symbols — cup, pentacle, sword, and wand. Above the figure floats a lemniscate (infinity symbol), and a belt shaped like the ouroboros encircles the waist.",
@@ -1211,6 +1244,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/8/88/RWS_Tarot_02_High_Priestess.jpg",
         "keywords_upright": ["intuition", "mystery", "subconscious", "inner voice", "sacred knowledge", "stillness", "the divine feminine"],
         "keywords_reversed": ["secrets", "withdrawal", "repressed feelings", "disconnection from intuition", "hidden agendas", "blocked psychic insight"],
+        "quick_meaning": "Trust your gut feeling instead of rushing to a logical answer.",
+        "example": "Like sensing something is off about a decision even though you can't explain why yet, and waiting before you act.",
         "upright_meaning": "The High Priestess is the keeper of the veil between conscious and unconscious worlds. She does not give answers — she invites you to listen, dream, and wait. This card calls you to slow down and trust what you already know but cannot yet explain. Insight here comes in symbols, sleep, and silence, not in spreadsheets.",
         "reversed_meaning": "Reversed, the Priestess suggests you have severed contact with your inner knowing — drowning intuition in noise, logic, or other people's opinions. It can also reveal secrets ready to surface, or a fear of looking inward at what you've buried. The pool has stilled because you refuse to approach it.",
         "description": "A serene woman is seated between two pillars — one black (Boaz) and one white (Jachin) — at the entrance to a hidden temple. A crescent moon rests at her feet, a crown of crescents adorns her head, and she holds a partially concealed scroll labeled TORA. Behind her hangs a veil patterned with pomegranates, hinting at the mysteries beyond.",
@@ -1222,6 +1257,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/d/d2/RWS_Tarot_03_Empress.jpg",
         "keywords_upright": ["abundance", "nurturing", "fertility", "creativity", "sensuality", "nature", "maternal care"],
         "keywords_reversed": ["dependence", "smothering", "creative block", "neglect", "burnout", "disconnection from body"],
+        "quick_meaning": "Abundance, comfort, and creativity — a time to nurture yourself and what you're growing.",
+        "example": "Like taking time to cook a good meal, tend a plant, or care for a project instead of pushing through exhausted.",
         "upright_meaning": "The Empress is the sovereign of the senses and the abundant earth. She rules through generosity rather than force — what she touches grows, ripens, and feeds others. Drawing this card invites you to slow down, savor, and create from a full vessel: nourish your body, beautify your space, tend a project as you would a garden, and remember that pleasure is not a detour but the destination.",
         "reversed_meaning": "Reversed, the Empress signals a disrupted relationship with your own well-being and creative flow. Either you are overgiving — smothering loved ones, sacrificing yourself dry — or you have abandoned the gentle care your body, art, or home needs to thrive. Burnout, creative block, and feeling 'cut off' from joy are her warnings.",
         "description": "A regal woman reclines on cushions in a sunlit field, crowned with twelve stars and wearing a flowing gown patterned with pomegranates. A heart-shaped shield bearing the symbol of Venus rests beside her. Golden wheat ripens at her feet, and behind her a forest opens into a flowing waterfall.",
@@ -1233,6 +1270,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/c/c3/RWS_Tarot_04_Emperor.jpg",
         "keywords_upright": ["authority", "structure", "stability", "leadership", "discipline", "father figure", "command"],
         "keywords_reversed": ["tyranny", "rigidity", "loss of control", "abuse of power", "stubbornness", "absent father"],
+        "quick_meaning": "Structure and leadership — bringing order and clear rules to a situation.",
+        "example": "Like setting a budget, a schedule, or firm boundaries at work so things stop feeling chaotic.",
         "upright_meaning": "The Emperor builds and protects what the Empress nourishes — he is order, law, and stable command. Drawing this card calls you to claim authority over your domain: set clear rules, plan with rigor, defend boundaries, and lead from grounded confidence rather than reaction. He reminds you that structure, in its right place, is a form of love.",
         "reversed_meaning": "Reversed, the Emperor warns that authority has become domination. Rigidity, control issues, micromanagement, or an inability to delegate trust may all be at play. Alternatively, his reversal can speak of a missing or wounding father figure, an unstable foundation in your life, or a refusal to take responsibility when leadership is required.",
         "description": "A stern, bearded ruler sits on a stone throne carved with four ram's heads, holding an ankh-tipped scepter in one hand and a globe in the other. He wears a crown and red robes over armor. Behind him rise barren, rust-colored mountains under a clear sky.",
@@ -1244,6 +1283,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/3/3a/TheLovers.jpg",
         "keywords_upright": ["love", "harmony", "choices", "alignment of values", "union", "partnership", "commitment"],
         "keywords_reversed": ["disharmony", "imbalance", "misalignment", "broken trust", "indecision", "values conflict"],
+        "quick_meaning": "A meaningful choice about relationships or values — deciding what truly matters to you.",
+        "example": "Like choosing between two paths in a relationship or job offer, based on what you actually care about, not what looks good.",
         "upright_meaning": "The Lovers represent more than romance — they signify any meaningful union and the conscious choice that sustains it. This card asks you to align your actions with what you truly value, choose with eyes open rather than longing, and recognize that real love (in any form) is the merging of opposites without either being erased. A pivotal choice often accompanies this card.",
         "reversed_meaning": "Reversed, the Lovers warn of misalignment — between you and a partner, between your stated values and your behavior, or between head and heart. Trust may be fraying through small dishonesties, or you may be avoiding a decision that demands clarity. Reconnect with what you actually want, not what you've been told to want.",
         "description": "A naked man and woman stand in a paradise, separated by a flowing stream. Above them, an angel with red wings (Raphael) spreads its arms in blessing, framed by sun and cloud. Behind the woman grows the tree of knowledge with its serpent; behind the man, the tree of life with twelve flames.",
@@ -1255,6 +1296,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/d/db/RWS_Tarot_17_Star.jpg",
         "keywords_upright": ["hope", "inspiration", "renewal", "serenity", "spiritual guidance", "healing", "faith restored"],
         "keywords_reversed": ["despair", "lack of faith", "discouragement", "hopelessness", "creative drought", "disconnection from purpose"],
+        "quick_meaning": "Hope returning after a hard time — a sign that things are healing, quietly.",
+        "example": "Like feeling a small sense of calm and optimism return after a rough few months, even if nothing dramatic has changed yet.",
         "upright_meaning": "The Star arrives after the storm — she is the soft, certain light that returns when you thought it was gone. Drawing this card is a promise: you are being guided, healing is underway, and the long night has not been wasted. Trust the slow miracle. Pour what you have back into the world; there is more where it came from.",
         "reversed_meaning": "Reversed, the Star reveals that hope has dimmed and the inner light feels far away. You may be exhausted from giving without replenishment, or so focused on what went wrong that you can no longer see what is gently rising. Faith is not lost — it is buried under fatigue. Stop, rest, and remember why you started.",
         "description": "A nude woman kneels at the edge of a pool, one foot in the water and one on the land. She pours water from two jugs — one back into the pool, one onto the earth. Above her, one large eight-pointed star and seven smaller stars shine in a clear night sky. A bird perches on the tree behind her.",
@@ -1266,6 +1309,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/7/7f/RWS_Tarot_18_Moon.jpg",
         "keywords_upright": ["illusion", "intuition", "dreams", "subconscious", "uncertainty", "hidden fears", "psychic insight"],
         "keywords_reversed": ["confusion lifted", "clarity", "release", "truth revealed", "anxiety eased", "fears confronted"],
+        "quick_meaning": "Things aren't fully clear right now — trust your feelings over what you can prove.",
+        "example": "Like sensing something in a situation feels 'off' even though you can't point to concrete evidence yet.",
         "upright_meaning": "The Moon casts a beautiful, deceptive light. Things are not what they seem — and yet what stirs beneath the surface is real and worth your attention. This card asks you to walk the misty path anyway, feeling rather than seeing. Old fears, ancestral patterns, and prophetic dreams may all rise. Don't run from the howling — listen.",
         "reversed_meaning": "Reversed, the Moon signals fog beginning to clear. Truths long obscured surface; what was projected onto others is recognized as your own. Anxieties named lose their grip. There may still be discomfort in seeing clearly, but the worst of the illusion is breaking.",
         "description": "A full moon shines over a winding path that leads between two stone towers and disappears toward distant mountains. A dog and a wolf howl at the moon below. In the foreground, a crayfish crawls out of a pool, beginning the long journey of the path.",
@@ -1277,6 +1322,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/1/17/RWS_Tarot_19_Sun.jpg",
         "keywords_upright": ["joy", "success", "vitality", "clarity", "confidence", "warmth", "celebration"],
         "keywords_reversed": ["temporary gloom", "delayed success", "overoptimism", "ego inflation", "burnout", "loss of enthusiasm"],
+        "quick_meaning": "Joy, success, and clarity — things are going well and it shows.",
+        "example": "Like finally getting good news you'd been waiting for, or just feeling genuinely happy and confident in yourself.",
         "upright_meaning": "The Sun is the most unambiguous yes in the deck — clarity, vitality, the warmth of being fully yourself in the open. Drawing this card affirms that the doubt of the Moon has lifted, and what is true about you can finally be seen. Celebrate without apology, share your warmth, and let yourself be witnessed in joy.",
         "reversed_meaning": "Reversed, the Sun's brightness is dimmed — not extinguished. Success may be delayed, optimism may be papering over real concerns, or you may be performing happiness rather than feeling it. Alternatively, ego can outshine substance: too much certainty, not enough humility. Step into actual sunlight, not the idea of it.",
         "description": "A radiant sun with a serene face shines high above a stone wall lined with sunflowers. A naked child sits on a white horse, arms outstretched, holding a red banner aloft. The child is crowned with a wreath and a single red feather.",
@@ -1288,6 +1335,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/f/ff/RWS_Tarot_21_World.jpg",
         "keywords_upright": ["completion", "wholeness", "achievement", "integration", "fulfillment", "travel", "graduation"],
         "keywords_reversed": ["incompletion", "loose ends", "shortcuts", "stagnation", "unfinished business", "fear of closure"],
+        "quick_meaning": "Completion — a big chapter or goal has come full circle.",
+        "example": "Like finishing a degree, a big project, or a long personal journey and finally feeling 'I did it.'",
         "upright_meaning": "The World marks the completion of a major cycle — the long journey of the Fool has reached its triumphant close. Drawing this card affirms that something significant has come full circle: integration achieved, lesson absorbed, mastery earned. Celebrate the wholeness, then notice the small gap in the wreath — every ending is also a doorway into the next, larger spiral.",
         "reversed_meaning": "Reversed, the World suggests you are circling near completion but resisting the final step — fear of what comes next, attachment to the journey itself, or skipping the closure that would let you fully claim what you've built. Tie the loose ends. Acknowledge what you've achieved. Then the next door can open.",
         "description": "A dancing figure floats inside an oval wreath of green laurel, draped with a violet sash and holding two wands. In the four corners of the card appear an angel, an eagle, a bull, and a lion — the four fixed signs of the zodiac and the four evangelists.",
@@ -1299,6 +1348,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/8/8d/RWS_Tarot_05_Hierophant.jpg",
         "keywords_upright": ["tradition", "spiritual teacher", "conformity", "doctrine", "ritual", "institutions", "mentorship"],
         "keywords_reversed": ["rebellion", "unconventional", "breaking tradition", "personal beliefs", "freedom", "dogma rejected"],
+        "quick_meaning": "Learning from tradition, mentors, or established systems instead of figuring it out alone.",
+        "example": "Like taking a class, following a proven method, or asking an experienced person for advice instead of guessing.",
         "upright_meaning": "The Hierophant is the keeper of established wisdom — religion, mentorship, marriage, school, the tested paths that came before you. Drawing this card invites you to learn from tradition rather than reinvent the wheel: find a teacher, join a community, accept a rite of passage. There is power in being part of something older than yourself.",
         "reversed_meaning": "Reversed, the Hierophant signals time to step outside the institution — to question doctrine, leave the orthodox path, or trust your own spiritual authority. Inherited rules may have become cages; what was once meaningful ritual has hollowed into performance. Listen to the part of you that won't kneel.",
         "description": "A robed religious figure crowned with a triple tiara sits between two stone pillars, raising one hand in blessing and holding a triple-cross staff in the other. Two tonsured monks kneel before him on a black-and-white tiled floor; crossed keys lie at his feet.",
@@ -1310,6 +1361,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/9/9b/RWS_Tarot_07_Chariot.jpg",
         "keywords_upright": ["willpower", "victory", "control", "determination", "focus", "direction", "ambition"],
         "keywords_reversed": ["loss of control", "lack of direction", "aggression", "scattered effort", "self-doubt", "obstacles"],
+        "quick_meaning": "Pushing forward with focus and willpower toward a clear goal.",
+        "example": "Like staying disciplined and determined to finish a hard project even when it would be easier to give up.",
         "upright_meaning": "The Chariot is harnessed will — opposing forces yoked together and driven toward a single goal through sheer determination. Drawing this card promises victory through focus, not luck. The trick is steering: keep your eyes ahead, hold the reins of conflicting impulses, and refuse distraction. You can do this, but only if you choose direction.",
         "reversed_meaning": "Reversed, the Chariot signals lost direction. The sphinxes pull opposite ways; the driver flails the reins without effect. Ambition becomes aggression, momentum becomes recklessness, or the engine simply stalls. Stop, name what you actually want, and re-yoke your inner forces before pushing again.",
         "description": "An armored warrior stands in a stone chariot pulled by two sphinxes — one black, one white. The driver wears a crown of stars, a square breastplate, and holds a wand. Above the chariot hangs a starry canopy; the chariot itself bears a winged solar disc and lunar symbols.",
@@ -1321,6 +1374,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/f/f5/RWS_Tarot_08_Strength.jpg",
         "keywords_upright": ["inner strength", "courage", "patience", "compassion", "self-mastery", "gentle power", "endurance"],
         "keywords_reversed": ["self-doubt", "weakness", "raw force", "impatience", "insecurity", "loss of nerve"],
+        "quick_meaning": "Quiet, patient courage — handling a hard situation with calm instead of force.",
+        "example": "Like staying composed and kind during a difficult conversation instead of losing your temper.",
         "upright_meaning": "Strength is power tempered by love. A woman calmly closes the jaws of a lion not by force but by presence — she has tamed the wild within. Drawing this card affirms you have more inner resilience than you realize, and that the gentlest, most patient approach will succeed where brute effort fails. Tame, don't suppress.",
         "reversed_meaning": "Reversed, Strength reveals self-doubt eating away at confidence, or impulsive force masquerading as courage. You may be running from your wild nature instead of befriending it, or pushing through with white-knuckled effort instead of patient mastery. Soften, then continue.",
         "description": "A serene woman in a flowing white gown gently holds the jaws of a great lion. She wears a crown of flowers and the lemniscate (infinity symbol) hovers above her head. Distant mountains rise behind her under a warm sky.",
@@ -1332,6 +1387,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/4/4d/RWS_Tarot_09_Hermit.jpg",
         "keywords_upright": ["introspection", "solitude", "inner guidance", "wisdom", "soul-searching", "withdrawal", "spiritual seeking"],
         "keywords_reversed": ["isolation", "loneliness", "withdrawal from others", "rejection of guidance", "paranoia", "lost in thought"],
+        "quick_meaning": "Taking time alone to think things through before deciding anything.",
+        "example": "Like turning down plans for a weekend to just be alone with your thoughts and figure out what you actually want.",
         "upright_meaning": "The Hermit climbs alone with a lamp — the only light is the one he carries. Drawing this card calls you to step back from noise, retreat into yourself, and listen to the wisdom that surfaces only in silence. Solitude here is not loneliness; it's the deliberate cultivation of inner light that will later guide others.",
         "reversed_meaning": "Reversed, the Hermit warns that solitude has soured into isolation — withdrawal that no longer nourishes, only walls you off. Alternatively, you may be refusing genuine wisdom available to you, drowning out the inner voice with distraction or surrounding yourself with people to avoid being alone with yourself.",
         "description": "A cloaked elder stands atop a snow-capped mountain, holding a lit lantern in one hand and a tall staff in the other. His head is bowed, his beard long. The lantern contains a six-pointed star (Seal of Solomon).",
@@ -1343,6 +1400,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg",
         "keywords_upright": ["cycles", "turning point", "fate", "luck", "destiny", "change", "synchronicity"],
         "keywords_reversed": ["bad luck", "resistance to change", "stuck cycle", "external locus of control", "delays", "unwelcome shift"],
+        "quick_meaning": "Change is coming — a turning point, for better or worse, that's mostly out of your control.",
+        "example": "Like an unexpected opportunity (or setback) showing up out of nowhere and shifting your plans.",
         "upright_meaning": "The Wheel turns. What rose will fall; what fell will rise. Drawing this card heralds a pivot point — circumstances shift, fortune favors a new direction, a cycle long-running closes. Cooperate with the turning rather than resisting; the wheel does not stop because you grip it.",
         "reversed_meaning": "Reversed, the Wheel suggests resistance to natural change, or a stuck pattern where you keep meeting the same lesson. Bad luck may seem to dog you, but more often the same wheel is grinding because you haven't learned what this turn was meant to teach. Surrender, learn, move.",
         "description": "A great wheel floats in the clouds, marked with mystical letters (TARO/ROTA/TORA) and the Hebrew name of God. A sphinx sits atop the wheel holding a sword; a snake descends one side, while Anubis (jackal-headed) rises on the other. In the four corners are an angel, an eagle, a bull, and a lion, all reading books.",
@@ -1354,6 +1413,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/e/e0/RWS_Tarot_11_Justice.jpg",
         "keywords_upright": ["fairness", "truth", "accountability", "cause and effect", "balance", "legal matters", "honesty"],
         "keywords_reversed": ["injustice", "dishonesty", "lack of accountability", "denial", "bias", "consequences avoided"],
+        "quick_meaning": "Fairness and consequences — what you put in is what you get back.",
+        "example": "Like a situation finally being resolved fairly, or facing the real consequences of a choice you made.",
         "upright_meaning": "Justice holds the scales and the sword. Drawing this card affirms that truth and consequence are working in your favor — but only if you have acted with integrity. Decisions, rulings, and contracts come into focus; expect outcomes that match what you have actually sown. Tell the whole truth, even to yourself.",
         "reversed_meaning": "Reversed, Justice signals imbalance — accountability dodged, truth shaded, consequences postponed but not erased. You or someone in your situation is avoiding the honest reckoning. Bias, denial, or unfair treatment may be at play. The scales will rebalance; the only question is whether by choice or by force.",
         "description": "A crowned figure sits on a stone throne between two pillars, holding upright a double-edged sword in one hand and balanced scales in the other. They wear a red robe and a small square crown. A purple veil hangs behind them.",
@@ -1365,6 +1426,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/2/2b/RWS_Tarot_12_Hanged_Man.jpg",
         "keywords_upright": ["surrender", "new perspective", "pause", "letting go", "sacrifice", "suspension", "enlightenment"],
         "keywords_reversed": ["stalling", "indecision", "resistance", "martyrdom", "delay", "missed insight"],
+        "quick_meaning": "Pause and look at things from a different angle instead of forcing a decision.",
+        "example": "Like putting a decision on hold for now because you sense that rushing it would be a mistake.",
         "upright_meaning": "The Hanged Man is suspended — willingly, peacefully — and sees the world upside-down. Drawing this card invites surrender, not defeat. Stop pushing. Let things unfold from a new angle. The pause that feels like waste is actually the only position from which the next insight can arrive.",
         "reversed_meaning": "Reversed, the Hanged Man shows stalling masquerading as surrender — refusing to act, refusing to decide, indefinitely delaying the very pause that should yield insight. Alternatively, martyrdom: sacrificing without purpose, suffering for show. Get down from the tree, or actually hang there and learn.",
         "description": "A serene young man hangs upside-down from a T-shaped wooden cross (a living tree) by one foot. His other leg is bent into a figure-four. His hands are bound behind his back. A radiant halo surrounds his head; his face is calm, even faintly smiling.",
@@ -1376,6 +1439,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/d/d7/RWS_Tarot_13_Death.jpg",
         "keywords_upright": ["endings", "transformation", "transition", "release", "metamorphosis", "rebirth", "letting go"],
         "keywords_reversed": ["resistance to change", "stagnation", "fear of endings", "clinging", "incomplete transformation", "delayed renewal"],
+        "quick_meaning": "An ending that makes room for something new — not literal death, but real change.",
+        "example": "Like a relationship, job, or habit ending, which feels hard at first but clears space for something better.",
         "upright_meaning": "Death is the great clearing — what no longer serves must end so what is alive can grow. Drawing this card is almost never literal; it marks the necessary close of a chapter, identity, relationship, or way of being. Mourn what's leaving, then welcome what the empty space allows. Rebirth is on the other side.",
         "reversed_meaning": "Reversed, Death reveals resistance to a transformation that is already underway. You may be clinging to a chapter clearly ending, fearing the void, or refusing to grieve what's gone. The change still happens; the only choice is whether to fight or flow. Let go.",
         "description": "A skeletal figure in black armor rides a white horse across a barren field, carrying a black banner adorned with a white rose. A fallen king lies on the ground; a child, a maiden, and a bishop approach the rider. In the distance, the sun rises between two towers.",
@@ -1387,6 +1452,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/f/f8/RWS_Tarot_14_Temperance.jpg",
         "keywords_upright": ["balance", "moderation", "patience", "blending", "alchemy", "harmony", "calibration"],
         "keywords_reversed": ["imbalance", "excess", "impatience", "discord", "rushing", "extremes"],
+        "quick_meaning": "Balance and patience — blending different parts of your life calmly instead of rushing.",
+        "example": "Like slowly finding a healthy routine between work and rest instead of swinging between overworking and burning out.",
         "upright_meaning": "Temperance is the slow alchemy of mixing opposites until something new and golden emerges. Drawing this card invites measured patience: blend, don't force; calibrate, don't decide all at once. The art is in the proportion. Take what is fiery, take what is watery, and pour them between vessels until they become medicine.",
         "reversed_meaning": "Reversed, Temperance signals lost calibration — extremes, excess, impatience, the spilling of effort because you tried to pour too fast. The medicine becomes poison when proportions break. Pause, restore measured pace, and return to the slow art.",
         "description": "An angel with red wings stands with one foot in a pool of water and the other on dry land, pouring water between two golden cups in a continuous arc that defies physics. Iris flowers grow at the water's edge; a path winds toward distant mountains crowned by a radiant sun.",
@@ -1398,6 +1465,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/5/55/RWS_Tarot_15_Devil.jpg",
         "keywords_upright": ["addiction", "attachment", "shadow", "materialism", "bondage", "obsession", "unhealthy patterns"],
         "keywords_reversed": ["breaking free", "reclaiming power", "releasing addiction", "awareness", "detachment", "escape"],
+        "quick_meaning": "Feeling stuck in a pattern, habit, or relationship that isn't good for you.",
+        "example": "Like knowing a habit — scrolling your phone for hours, an unhealthy relationship — isn't serving you, but still going back to it.",
         "upright_meaning": "The Devil shows what enslaves you — addiction, obsession, material attachment, the relationship or pattern you keep returning to even when you know better. Drawing this card holds up a mirror: the chains around the figures' necks are loose enough to slip off. You are bound by what you choose to keep believing. Name the chain.",
         "reversed_meaning": "Reversed, the Devil signals the chain being recognized — and broken. An addiction is named, an unhealthy pattern walked away from, a shadow integrated rather than projected. Power once given away is reclaimed. The work is not complete — old hooks still tug — but the cage door is open.",
         "description": "A horned, bat-winged demon perches on a black pedestal, raising one clawed hand in a mock blessing and holding a torch downward in the other. Below him, a naked man and woman are chained to the pedestal — but the chains around their necks are loose enough to lift off. Both figures have small horns and tails of their own.",
@@ -1409,6 +1478,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/5/53/RWS_Tarot_16_Tower.jpg",
         "keywords_upright": ["sudden upheaval", "revelation", "collapse of falsehood", "shock", "awakening", "breakdown", "liberation"],
         "keywords_reversed": ["averted disaster", "fear of change", "delayed reckoning", "inner upheaval", "near miss", "warning unheeded"],
+        "quick_meaning": "A sudden, shocking change that breaks down something that wasn't built to last.",
+        "example": "Like a plan falling apart all at once — painful in the moment, but it clears out something that needed to change anyway.",
         "upright_meaning": "The Tower falls — a structure built on a false foundation cannot stand once lightning strikes. Drawing this card heralds sudden, often shocking revelation that topples what couldn't survive truth anyway. It feels catastrophic in the moment; in retrospect it is liberation. What is real cannot be destroyed by lightning. Let the false fall.",
         "reversed_meaning": "Reversed, the Tower's blow is softened — averted disaster, postponed reckoning, or the lightning falling internally rather than externally. You may sense the cracks and act before collapse, or you may be delaying an honest reckoning that only grows more costly. Acknowledge the lightning before it strikes.",
         "description": "A tall stone tower is struck by lightning and burns at the top, its crown blown off. Two figures plunge from the broken windows, falling head-down toward the ground far below. Drops shaped like the Hebrew letter Yod fall from the sky around them.",
@@ -1420,6 +1491,8 @@ SEED_CARDS = [
         "image_url": f"{WIKI_BASE}/d/dd/RWS_Tarot_20_Judgement.jpg",
         "keywords_upright": ["awakening", "rebirth", "calling", "reckoning", "absolution", "second chance", "inner awakening"],
         "keywords_reversed": ["self-doubt", "ignoring the call", "harsh self-judgement", "missed opportunity", "regret", "stagnation"],
+        "quick_meaning": "A wake-up call — recognizing it's time to rise above old patterns and answer what's calling you.",
+        "example": "Like realizing you're ready to leave a job, habit, or mindset you've outgrown, and finally acting on it.",
         "upright_meaning": "Judgement is the trumpet that wakes you. Drawing this card marks an awakening — a call to rise above an old version of yourself, answer a purpose long whispered, or finally forgive what you've been carrying. It is reckoning as resurrection, not condemnation. Listen. Stand up. Step into the larger life that has been waiting.",
         "reversed_meaning": "Reversed, Judgement reveals a call ignored or self-judgement turned cruel. You may be refusing to rise from an old grave, mistaking harshness for accountability, or doubting an inner summons because it would change too much. The trumpet keeps sounding. Stop arguing with it.",
         "description": "An angel (Gabriel) blows a great trumpet adorned with a red cross banner amid clouds. Below, men, women, and children rise from open coffins floating on grey water, arms raised in welcome. Distant mountains complete the horizon.",

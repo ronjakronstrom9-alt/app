@@ -28,7 +28,7 @@ function toRoman(n: number): string {
 }
 
 export default function CardDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, date } = useLocalSearchParams<{ id: string; date?: string }>();
   const router = useRouter();
   const { user, refresh } = useAuth();
   const [card, setCard] = useState<Card | null>(null);
@@ -36,6 +36,12 @@ export default function CardDetail() {
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(true);
+  const [deeper, setDeeper] = useState(false);
+
+  // Opened from "Card of the Day" / the Journal calendar: the note editor
+  // below becomes that day's reflection, so it's the exact same text shown
+  // in Your Journal — instead of the separate, undated per-card note.
+  const isDailyMode = !!date;
 
   const isFav = !!user && !!card && user.favorites?.includes(card.id);
 
@@ -44,11 +50,16 @@ export default function CardDetail() {
       try {
         const c = await api.getCard(id);
         setCard(c);
-        const n = await api.getNote(id).catch(() => ({ text: "" }));
-        setNote(n.text || "");
+        if (isDailyMode) {
+          const entry = await api.getDailyEntry(date!).catch(() => null);
+          setNote(entry?.reflection || "");
+        } else {
+          const n = await api.getNote(id).catch(() => ({ text: "" }));
+          setNote(n.text || "");
+        }
       } finally { setLoading(false); }
     })();
-  }, [id]);
+  }, [id, date]);
 
   const toggleFav = async () => {
     if (!card) return;
@@ -59,7 +70,11 @@ export default function CardDetail() {
   const saveNote = async () => {
     if (!card) return;
     setNoteSaved(false);
-    await api.saveNote(card.id, note);
+    if (isDailyMode) {
+      await api.saveReflection(date!, note);
+    } else {
+      await api.saveNote(card.id, note);
+    }
     setNoteSaved(true);
   };
 
@@ -73,6 +88,10 @@ export default function CardDetail() {
 
   const meaning = reversed ? card.reversed_meaning : card.upright_meaning;
   const kws = reversed ? card.keywords_reversed : card.keywords_upright;
+  // Beginner-friendly layout: a short plain-language meaning + a concrete
+  // example up front, with the full literary meaning and symbolism tucked
+  // behind "Go deeper" — only for cards that have this short-form content.
+  const hasQuickForm = !reversed && !!card.quick_meaning;
 
   return (
     <View style={styles.root}>
@@ -102,14 +121,14 @@ export default function CardDetail() {
 
           <View style={styles.toggle}>
             <TouchableOpacity
-              onPress={() => setReversed(false)}
+              onPress={() => { setReversed(false); setDeeper(false); }}
               style={[styles.toggleBtn, !reversed && styles.toggleActive]}
               testID="toggle-upright"
             >
               <Text style={[styles.toggleText, !reversed && styles.toggleTextActive]}>Upright</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setReversed(true)}
+              onPress={() => { setReversed(true); setDeeper(false); }}
               style={[styles.toggleBtn, reversed && styles.toggleActive]}
               testID="toggle-reversed"
             >
@@ -123,26 +142,65 @@ export default function CardDetail() {
             ))}
           </View>
 
-          <Text style={styles.sectionHeading}>Meaning</Text>
-          <View style={styles.divider} />
-          <Text style={styles.body}>{meaning}</Text>
-
-          {!reversed && (
+          {hasQuickForm ? (
             <>
-              <Text style={styles.sectionHeading}>Imagery & Symbolism</Text>
+              <Text style={styles.sectionHeading}>Meaning</Text>
               <View style={styles.divider} />
-              <Text style={styles.body}>{card.description}</Text>
-              <Text style={[styles.body, { marginTop: 8 }]}>{card.symbolism}</Text>
+              <Text style={styles.body}>{card.quick_meaning}</Text>
+
+              {!!card.example && (
+                <>
+                  <Text style={[styles.sectionHeading, { fontSize: 20, marginTop: 18 }]}>In Everyday Life</Text>
+                  <View style={styles.divider} />
+                  <Text style={styles.body}>{card.example}</Text>
+                </>
+              )}
+
+              <TouchableOpacity
+                onPress={() => setDeeper((d) => !d)}
+                style={styles.deeperBtn}
+                testID="card-go-deeper"
+              >
+                <Ionicons name={deeper ? "chevron-up" : "chevron-down"} size={14} color={colors.gold} />
+                <Text style={styles.deeperText}>{deeper ? "Show less" : "Go deeper"}</Text>
+              </TouchableOpacity>
+
+              {deeper && (
+                <>
+                  <Text style={[styles.sectionHeading, { marginTop: 18 }]}>Deeper Interpretation</Text>
+                  <View style={styles.divider} />
+                  <Text style={styles.body}>{card.upright_meaning}</Text>
+                  <Text style={[styles.sectionHeading, { fontSize: 20, marginTop: 18 }]}>Imagery & Symbolism</Text>
+                  <View style={styles.divider} />
+                  <Text style={styles.body}>{card.description}</Text>
+                  <Text style={[styles.body, { marginTop: 8 }]}>{card.symbolism}</Text>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionHeading}>Meaning</Text>
+              <View style={styles.divider} />
+              <Text style={styles.body}>{meaning}</Text>
+
+              {!reversed && (
+                <>
+                  <Text style={styles.sectionHeading}>Imagery & Symbolism</Text>
+                  <View style={styles.divider} />
+                  <Text style={styles.body}>{card.description}</Text>
+                  <Text style={[styles.body, { marginTop: 8 }]}>{card.symbolism}</Text>
+                </>
+              )}
             </>
           )}
 
-          <Text style={styles.sectionHeading}>My Notes</Text>
+          <Text style={styles.sectionHeading}>{isDailyMode ? "Today's Reflection" : "My Notes"}</Text>
           <View style={styles.divider} />
           <TextInput
             value={note}
             onChangeText={(t) => { setNote(t); setNoteSaved(false); }}
             onBlur={saveNote}
-            placeholder="Write your own interpretation..."
+            placeholder={isDailyMode ? "What does this card invite you to focus on today?" : "Write your own interpretation..."}
             placeholderTextColor={colors.textMuted}
             multiline
             style={styles.noteInput}
@@ -315,4 +373,10 @@ const styles = StyleSheet.create({
     borderRadius: 999, borderWidth: 1, borderColor: colors.gold,
   },
   noteSaveText: { color: colors.gold, fontFamily: fonts.display, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
+  deeperBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start",
+    marginTop: 16, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1, borderColor: colors.gold,
+  },
+  deeperText: { color: colors.gold, fontFamily: fonts.display, fontSize: 12, letterSpacing: 2, textTransform: "uppercase" },
 });

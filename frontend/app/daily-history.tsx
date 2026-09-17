@@ -263,7 +263,7 @@ function EntryModal({
               <View style={mstyles.actions}>
                 <TouchableOpacity
                   style={[mstyles.actionBtn, { borderColor: colors.gold }]}
-                  onPress={() => { onClose(); router.push(`/card/${entry.card_id}`); }}
+                  onPress={() => { onClose(); router.push(`/card/${entry.card_id}?date=${entry.date}`); }}
                   testID="dh-open-card"
                 >
                   <Ionicons name="book" size={14} color={colors.gold} />

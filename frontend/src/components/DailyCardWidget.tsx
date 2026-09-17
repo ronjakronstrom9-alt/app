@@ -20,7 +20,7 @@ export function DailyCardWidget() {
     <View style={styles.wrap} testID="daily-card-widget">
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => router.push(`/card/${c.id}`)}
+        onPress={() => router.push(`/card/${c.id}?date=${data.date}`)}
         style={styles.mainBtn}
       >
         <View style={styles.left}>

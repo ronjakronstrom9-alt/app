@@ -112,6 +112,8 @@ export const api = {
     ),
   saveReflection: (dateIso: string, text: string) =>
     request<{ ok: boolean }>("POST", "/daily-history/reflect", { date: dateIso, text }),
+  getDailyEntry: (dateIso: string) =>
+    request<DailyEntry>("GET", `/daily-history/entry?date=${dateIso}`),
 
   nextCombo: (excludeId?: string) =>
     request<ComboQuestion>("GET", `/combos/next${excludeId ? `?exclude=${excludeId}` : ""}`),
@@ -177,6 +179,8 @@ export type Card = {
   suit?: string | null;
   keywords_upright: string[];
   keywords_reversed: string[];
+  quick_meaning?: string | null;
+  example?: string | null;
   upright_meaning: string;
   reversed_meaning: string;
   description: string;
