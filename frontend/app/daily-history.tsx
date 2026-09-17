@@ -60,6 +60,11 @@ export default function DailyHistory() {
 
   const grid = useMemo(() => buildGrid(year, month), [year, month]);
 
+  const reflectedEntries = useMemo(
+    () => entries.filter((e) => !!e.reflection).sort((a, b) => b.date.localeCompare(a.date)),
+    [entries],
+  );
+
   const goPrev = () => {
     if (month === 1) { setMonth(12); setYear(year - 1); }
     else setMonth(month - 1);
@@ -96,7 +101,7 @@ export default function DailyHistory() {
             </TouchableOpacity>
             <View style={{ alignItems: "center" }}>
               <Text style={styles.monthLabel}>{MONTHS[month - 1]}</Text>
-              <Text style={styles.yearLabel}>{year} · {drawnCount} drawn</Text>
+              <Text style={styles.yearLabel}>{year} · {drawnCount} drawn · {reflectedEntries.length} reflected</Text>
             </View>
             <TouchableOpacity
               onPress={goNext}
@@ -178,6 +183,47 @@ export default function DailyHistory() {
               <Text style={styles.emptyTitle}>No draws this month</Text>
               <Text style={styles.emptySub}>
                 Open the app once each day to weave your journal.
+              </Text>
+            </View>
+          ) : null}
+
+          {reflectedEntries.length > 0 && (
+            <View style={styles.recentSection}>
+              <Text style={styles.recentTitle}>Recent Reflections</Text>
+              <View style={{ gap: 10 }}>
+                {reflectedEntries.slice(0, 8).map((e) => {
+                  const pretty = new Date(e.date + "T00:00:00").toLocaleDateString(undefined, {
+                    weekday: "short", month: "short", day: "numeric",
+                  });
+                  return (
+                    <TouchableOpacity
+                      key={e.date}
+                      style={styles.recentRow}
+                      onPress={() => setOpenDate(e.date)}
+                      activeOpacity={0.8}
+                      testID={`recent-reflection-${e.date}`}
+                    >
+                      <Image source={{ uri: imageUri(e.image_url) }} style={styles.recentThumb} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                          <Text style={styles.recentCard}>{e.card_name}</Text>
+                          <Text style={styles.recentDate}>{pretty}</Text>
+                        </View>
+                        <Text style={styles.recentPreview} numberOfLines={2}>{e.reflection}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {drawnCount > 0 && reflectedEntries.length === 0 && !loading ? (
+            <View style={styles.emptyBox}>
+              <Ionicons name="create-outline" size={44} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>No reflections yet</Text>
+              <Text style={styles.emptySub}>
+                Tap any drawn day above and write what it brought up for you.
               </Text>
             </View>
           ) : null}
@@ -343,6 +389,23 @@ const styles = StyleSheet.create({
   emptyBox: { alignItems: "center", gap: 8, paddingVertical: 20 },
   emptyTitle: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 18, letterSpacing: 2 },
   emptySub: { color: colors.textSecondary, fontSize: 13, textAlign: "center", paddingHorizontal: 30 },
+  recentSection: { marginTop: 28 },
+  recentTitle: {
+    color: colors.gold, fontFamily: fonts.display, fontSize: 16, letterSpacing: 2,
+    textTransform: "uppercase", marginBottom: 12,
+  },
+  recentRow: {
+    flexDirection: "row", gap: 12, alignItems: "flex-start",
+    backgroundColor: colors.surface, borderRadius: 14, padding: 12,
+    borderWidth: 1, borderColor: colors.borderSoft,
+  },
+  recentThumb: {
+    width: 40, aspectRatio: 0.58, borderRadius: 6, backgroundColor: colors.surface2,
+    borderWidth: 1, borderColor: colors.gold,
+  },
+  recentCard: { color: colors.gold, fontFamily: fonts.display, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
+  recentDate: { color: colors.textMuted, fontSize: 11 },
+  recentPreview: { color: colors.textPrimary, fontSize: 13, lineHeight: 18, marginTop: 4 },
 });
 
 const mstyles = StyleSheet.create({
